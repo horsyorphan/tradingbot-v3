@@ -61,8 +61,8 @@ app.on('window-all-closed', () => {
 // IPC Handlers
 ipcMain.handle('get-api-credentials', async () => {
   try {
-    const apiKey = await keytar.getPassword('SimpleCryptoDesk', 'binance-api-key');
-    const apiSecret = await keytar.getPassword('SimpleCryptoDesk', 'binance-api-secret');
+    const apiKey = await keytar.getPassword('DoggyTutuTrade', 'binance-api-key');
+    const apiSecret = await keytar.getPassword('DoggyTutuTrade', 'binance-api-secret');
     return { apiKey, apiSecret };
   } catch (error) {
     console.error('Error getting API credentials:', error);
@@ -72,9 +72,9 @@ ipcMain.handle('get-api-credentials', async () => {
 
 ipcMain.handle('save-api-credentials', async (event, { apiKey, apiSecret, isTestnet }) => {
   try {
-    await keytar.setPassword('SimpleCryptoDesk', 'binance-api-key', apiKey);
-    await keytar.setPassword('SimpleCryptoDesk', 'binance-api-secret', apiSecret);
-    await keytar.setPassword('SimpleCryptoDesk', 'binance-testnet', isTestnet.toString());
+    await keytar.setPassword('DoggyTutuTrade', 'binance-api-key', apiKey);
+    await keytar.setPassword('DoggyTutuTrade', 'binance-api-secret', apiSecret);
+    await keytar.setPassword('DoggyTutuTrade', 'binance-testnet', isTestnet.toString());
     
     // Initialize Binance API
     binanceAPI = new BinanceAPI(apiKey, apiSecret, isTestnet);
@@ -88,7 +88,7 @@ ipcMain.handle('save-api-credentials', async (event, { apiKey, apiSecret, isTest
 
 ipcMain.handle('get-testnet-setting', async () => {
   try {
-    const isTestnet = await keytar.getPassword('SimpleCryptoDesk', 'binance-testnet');
+    const isTestnet = await keytar.getPassword('DoggyTutuTrade', 'binance-testnet');
     return isTestnet === 'true';
   } catch (error) {
     return false;

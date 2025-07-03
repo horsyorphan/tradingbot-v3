@@ -1,5 +1,5 @@
 {
-  "name": "simplecryptodesk",
+  "name": "doggy-tutu-trade",
   "version": "1.0.0",
   "description": "A lightweight desktop crypto trading app for Binance",
   "main": "src/main.js",
@@ -18,7 +18,7 @@
     "electron",
     "desktop"
   ],
-  "author": "SimpleCryptoDesk",
+  "author": "Doggy&Tutu Trade",
   "license": "MIT",
   "devDependencies": {
     "electron": "^27.0.0",
@@ -30,9 +30,9 @@
     "ws": "^8.14.2",
     "node-fetch": "^2.7.0"
   },
-  "build": {
-    "appId": "com.simplecryptodesk.app",
-    "productName": "SimpleCryptoDesk",
+      "build": {
+      "appId": "com.doggytutu.trade",
+      "productName": "Doggy&Tutu Trade",
     "directories": {
       "output": "dist"
     },

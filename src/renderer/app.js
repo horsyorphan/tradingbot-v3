@@ -105,7 +105,7 @@ function cryptoApp() {
 
     // Initialization
     async init() {
-      console.log('🚀 Initializing SimpleCryptoDesk...');
+      console.log('🚀 Initializing Doggy&Tutu Trade...');
       this.isInitializing = true;
       
       try {

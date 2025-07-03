@@ -1,0 +1,16 @@
+{
+  "name": "Doggy&Tutu Trade",
+  "short_name": "Doggy&Tutu",
+  "description": "A desktop crypto trading app with Binance API integration and P&L tracking",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1f2937",
+  "theme_color": "#0066CC",
+  "icons": [
+    {
+      "src": "icons/logo.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+} 

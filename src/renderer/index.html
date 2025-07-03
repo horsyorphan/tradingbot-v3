@@ -243,6 +243,11 @@
                     <div class="stat-value" x-text="portfolio.filter(p => p.totalQuantity > 0).length"></div>
                     <div class="stat-desc" x-text="'Total symbols: ' + portfolio.length"></div>
                 </div>
+                <div class="stat">
+                    <div class="stat-title">Total Fees</div>
+                    <div class="stat-value text-error" x-text="'$' + (totalCommission || 0).toFixed(8)"></div>
+                    <div class="stat-desc text-base-content/60">Trading costs</div>
+                </div>
             </div>
 
             <!-- Portfolio Table -->
@@ -260,6 +265,7 @@
                                     <th>Market Value</th>
                                     <th>Realized P&L</th>
                                     <th>Unrealized P&L</th>
+                                    <th>Total Fees</th>
                                     <th>Total P&L</th>
                                     <th>Total P&L %</th>
                                 </tr>
@@ -280,6 +286,9 @@
                                         <td x-text="'$' + (position.currentValue || 0).toFixed(2)"></td>
                                         <td :class="(position.realizedPnL || 0) >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (position.realizedPnL || 0).toFixed(2)"></td>
                                         <td :class="(position.unrealizedPnL || 0) >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (position.unrealizedPnL || 0).toFixed(2)"></td>
+                                        <td class="text-error">
+                                            <span x-text="'$' + (position.totalCommission || 0).toFixed(8)"></span>
+                                        </td>
                                         <td :class="(position.totalPnL || 0) >= 0 ? 'text-success' : 'text-error'">
                                             <div class="font-semibold" x-text="'$' + (position.totalPnL || 0).toFixed(2)"></div>
                                         </td>
@@ -350,6 +359,8 @@
                                     <th>Side</th>
                                     <th>Quantity</th>
                                     <th>Price</th>
+                                    <th>Effective Price</th>
+                                    <th>Commission</th>
                                     <th>Value</th>
                                     <th>Status</th>
                                 </tr>
@@ -364,7 +375,18 @@
                                         </td>
                                         <td x-text="parseFloat(trade.quantity || 0).toFixed(8)"></td>
                                         <td x-text="trade.price ? '$' + parseFloat(trade.price).toFixed(4) : '--'"></td>
-                                        <td x-text="trade.price && trade.quantity ? '$' + (parseFloat(trade.price) * parseFloat(trade.quantity)).toFixed(2) : '--'"></td>
+                                        <td>
+                                            <span x-show="trade.effectivePrice" x-text="'$' + parseFloat(trade.effectivePrice || 0).toFixed(4)"></span>
+                                            <span x-show="!trade.effectivePrice" class="text-base-content/60">--</span>
+                                        </td>
+                                        <td>
+                                            <span x-show="trade.commission && parseFloat(trade.commission) > 0">
+                                                <span x-text="parseFloat(trade.commission).toFixed(8)"></span>
+                                                <span class="text-xs text-base-content/60" x-text="trade.commissionAsset"></span>
+                                            </span>
+                                            <span x-show="!trade.commission || parseFloat(trade.commission) === 0" class="text-base-content/60">--</span>
+                                        </td>
+                                        <td x-text="trade.effectivePrice && trade.quantity ? '$' + (parseFloat(trade.effectivePrice) * parseFloat(trade.quantity)).toFixed(2) : trade.price && trade.quantity ? '$' + (parseFloat(trade.price) * parseFloat(trade.quantity)).toFixed(2) : '--'"></td>
                                         <td>
                                             <div class="badge" :class="trade.success ? 'badge-success' : 'badge-error'" x-text="trade.success ? 'Success' : 'Failed'"></div>
                                         </td>

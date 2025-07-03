@@ -181,13 +181,65 @@ ipcMain.handle('place-order', async (event, orderData) => {
     
     console.log('🎯 Final execution price used:', executionPrice);
     
-    // Log the trade
+    // Extract commission/fees data
+    let totalCommission = 0;
+    let commissionAsset = '';
+    
+    if (result.fills && result.fills.length > 0) {
+      // Sum up all commission from fills
+      result.fills.forEach(fill => {
+        const commission = parseFloat(fill.commission || 0);
+        totalCommission += commission;
+        
+        // Track commission asset (usually base asset for buys, quote for sells)
+        if (fill.commissionAsset && !commissionAsset) {
+          commissionAsset = fill.commissionAsset;
+        }
+      });
+      
+      console.log('💰 Commission extracted:', {
+        amount: totalCommission,
+        asset: commissionAsset,
+        fills: result.fills.length
+      });
+    }
+    
+    // Calculate effective price (including fees)
+    let effectivePrice = parseFloat(executionPrice);
+    if (totalCommission > 0) {
+      // For BUY: fees add to cost, for SELL: fees reduce proceeds
+      // Note: This assumes commission is in quote currency (USDT)
+      // More complex logic needed for commission in base currency
+      if (orderData.side.toUpperCase() === 'BUY') {
+        // For BUY orders, commission typically in base asset (e.g., ETH)
+        // so effective price = execution price (commission doesn't directly affect USDT cost)
+        effectivePrice = parseFloat(executionPrice);
+      } else {
+        // For SELL orders, commission typically in quote asset (e.g., USDT)  
+        // so effective proceeds = execution price - (commission / quantity)
+        const quantity = parseFloat(orderData.quantity);
+        if (commissionAsset === orderData.symbol.replace(/USDT$/, '')) {
+          // Commission in base asset, doesn't affect price directly
+          effectivePrice = parseFloat(executionPrice);
+        } else {
+          // Commission in quote asset (USDT), reduce effective price
+          effectivePrice = parseFloat(executionPrice) - (totalCommission / quantity);
+        }
+      }
+      
+      console.log('💰 Effective price after fees:', effectivePrice, '(vs raw:', executionPrice, ')');
+    }
+    
+    // Log the trade with commission data
     const tradeRecord = {
       timestamp: new Date().toISOString(),
       symbol: orderData.symbol,
       side: orderData.side,
       quantity: orderData.quantity,
-      price: executionPrice,
+      price: executionPrice,              // Raw execution price
+      effectivePrice: effectivePrice.toString(), // Price including fees
+      commission: totalCommission.toString(),
+      commissionAsset: commissionAsset,
       orderId: result.orderId,
       status: result.status,
       success: true,

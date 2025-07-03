@@ -386,8 +386,8 @@ function cryptoApp() {
         position.unrealizedPnL = position.currentValue - position.totalCost;
         position.unrealizedPnLPercent = position.totalCost > 0 ? (position.unrealizedPnL / position.totalCost) * 100 : 0;
         
-        // Recalculate total P&L
-        position.totalPnL = position.realizedPnL + position.unrealizedPnL;
+        // Recalculate total P&L (subtract total commission for net profit/loss)
+        position.totalPnL = position.realizedPnL + position.unrealizedPnL - (position.totalCommission || 0);
         position.totalPnLPercent = position.totalInvested > 0 ? (position.totalPnL / position.totalInvested) * 100 : 0;
         
         // Update overall portfolio totals
@@ -401,6 +401,7 @@ function cryptoApp() {
       let totalCost = 0;
       let totalRealizedPnL = 0;
       let totalUnrealizedPnL = 0;
+      let totalCommission = 0;
       
       this.portfolio.forEach(position => {
         if (position.totalQuantity > 0) {
@@ -409,12 +410,14 @@ function cryptoApp() {
         }
         totalRealizedPnL += position.realizedPnL || 0;
         totalUnrealizedPnL += position.unrealizedPnL || 0;
+        totalCommission += position.totalCommission || 0;
       });
       
       this.totalPortfolioValue = totalValue;
       this.totalRealizedPnL = totalRealizedPnL;
       this.totalUnrealizedPnL = totalUnrealizedPnL;
-      this.totalPnL = totalRealizedPnL + totalUnrealizedPnL;
+      this.totalCommission = totalCommission;
+      this.totalPnL = totalRealizedPnL + totalUnrealizedPnL - totalCommission;
       this.totalPnLPercent = totalCost > 0 ? (this.totalPnL / totalCost) * 100 : 0;
     },
 
@@ -711,9 +714,17 @@ function cryptoApp() {
         successfulTrades.forEach(trade => {
           const symbol = trade.symbol;
           const quantity = parseFloat(trade.quantity) || 0;
-          const price = parseFloat(trade.price) || 0;
           
-          console.log(`Processing ${trade.side} ${quantity} ${symbol} at $${price}`);
+          // Use effective price (including fees) if available, otherwise fall back to raw price
+          const rawPrice = parseFloat(trade.price) || 0;
+          const effectivePrice = parseFloat(trade.effectivePrice) || rawPrice;
+          const commission = parseFloat(trade.commission) || 0;
+          const commissionAsset = trade.commissionAsset || '';
+          
+          // Use effective price for calculations if it exists
+          const priceForCalculation = effectivePrice;
+          
+          console.log(`Processing ${trade.side} ${quantity} ${symbol} at $${rawPrice} (effective: $${effectivePrice}, commission: ${commission} ${commissionAsset})`);
           
           if (!positions[symbol]) {
             positions[symbol] = {
@@ -722,6 +733,7 @@ function cryptoApp() {
               totalCost: 0,
               averagePrice: 0,
               realizedPnL: 0,
+              totalCommission: 0,
               trades: [],
               buyTrades: [],
               sellTrades: []
@@ -730,28 +742,29 @@ function cryptoApp() {
           
           const position = positions[symbol];
           position.trades.push(trade);
+          position.totalCommission += commission;
           
           if (trade.side === 'BUY') {
-            // Add to position
+            // Add to position using effective price
             position.totalQuantity += quantity;
-            position.totalCost += quantity * price;
+            position.totalCost += quantity * priceForCalculation;
             position.buyTrades.push(trade);
             
             // Update average price immediately
             position.averagePrice = position.totalQuantity > 0 ? position.totalCost / position.totalQuantity : 0;
             
-            console.log(`After BUY: quantity=${position.totalQuantity}, cost=$${position.totalCost}, avg=$${position.averagePrice.toFixed(4)}`);
+            console.log(`After BUY: quantity=${position.totalQuantity}, cost=$${position.totalCost}, avg=$${position.averagePrice.toFixed(4)} (includes fees)`);
             
           } else if (trade.side === 'SELL') {
             console.log(`Before SELL: quantity=${position.totalQuantity}, avg=$${position.averagePrice}`);
             
             // Calculate realized P&L for this sale using current average price
             if (position.totalQuantity > 0 && position.averagePrice > 0) {
-              const realizedPnLFromSale = (price - position.averagePrice) * quantity;
+              const realizedPnLFromSale = (priceForCalculation - position.averagePrice) * quantity;
               position.realizedPnL += realizedPnLFromSale;
               totalRealizedPnL += realizedPnLFromSale;
               
-              console.log(`Realized P&L from sale: $${realizedPnLFromSale.toFixed(2)} (sold at $${price} vs avg $${position.averagePrice.toFixed(4)})`);
+              console.log(`Realized P&L from sale: $${realizedPnLFromSale.toFixed(2)} (sold at effective $${priceForCalculation} vs avg $${position.averagePrice.toFixed(4)})`);
             }
             
             // Update position (sell reduces quantity and proportional cost)
@@ -811,8 +824,8 @@ function cryptoApp() {
                 totalUnrealizedPnL += unrealizedPnL;
               }
               
-              // Calculate total P&L (realized + unrealized)
-              const totalPnLForPosition = position.realizedPnL + unrealizedPnL;
+              // Calculate total P&L (realized + unrealized - total commission)
+              const totalPnLForPosition = position.realizedPnL + unrealizedPnL - position.totalCommission;
               const totalInvested = position.buyTrades.reduce((sum, t) => sum + (parseFloat(t.quantity) * parseFloat(t.price)), 0);
               const totalPnLPercent = totalInvested > 0 ? (totalPnLForPosition / totalInvested) * 100 : 0;
               
@@ -839,12 +852,16 @@ function cryptoApp() {
           }
         }
         
-        // Update totals
+        // Calculate total commission across all positions
+        const totalCommission = this.portfolio.reduce((sum, pos) => sum + (pos.totalCommission || 0), 0);
+        
+        // Update totals (subtract total commission for net P&L)
         this.totalPortfolioValue = totalValue;
-        this.totalPnL = totalUnrealizedPnL + totalRealizedPnL;
+        this.totalPnL = totalUnrealizedPnL + totalRealizedPnL - totalCommission;
         this.totalPnLPercent = totalCost > 0 ? (this.totalPnL / totalCost) * 100 : 0;
         this.totalRealizedPnL = totalRealizedPnL;
         this.totalUnrealizedPnL = totalUnrealizedPnL;
+        this.totalCommission = totalCommission;
         
         // Sort portfolio by total P&L (highest first)
         this.portfolio.sort((a, b) => (b.totalPnL || 0) - (a.totalPnL || 0));

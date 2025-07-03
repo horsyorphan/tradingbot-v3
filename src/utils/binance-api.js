@@ -14,7 +14,7 @@ class BinanceAPI {
       : 'https://api.binance.com';
     
     this.wsURL = isTestnet
-      ? 'wss://testnet.binance.vision/ws'
+      ? 'wss://stream.testnet.binance.vision/ws'
       : 'wss://stream.binance.com:9443/ws';
     
     this.ws = null;
@@ -104,6 +104,8 @@ class BinanceAPI {
     return await this.makePublicRequest('/api/v3/ticker/24hr', params);
   }
 
+
+
   // Validate order parameters
   validateOrder(orderData) {
     const { symbol, side, quantity, type = 'MARKET' } = orderData;
@@ -158,14 +160,17 @@ class BinanceAPI {
       return;
     }
 
+    console.log('Connecting to WebSocket:', this.wsURL);
     this.ws = new WebSocket(this.wsURL);
     
     this.ws.on('open', () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected successfully');
       this.reconnectAttempts = 0;
       
       // Resubscribe to all existing subscriptions
+      console.log('Resubscribing to', this.subscribers.size, 'streams');
       this.subscribers.forEach((callback, stream) => {
+        console.log('Resubscribing to stream:', stream);
         this.subscribeToStream(stream, callback, false);
       });
     });
@@ -173,10 +178,34 @@ class BinanceAPI {
     this.ws.on('message', (data) => {
       try {
         const message = JSON.parse(data);
+        console.log('🌐 WebSocket message received:', JSON.stringify(message, null, 2));
         
+        // Handle stream-wrapped messages (combined streams)
         if (message.stream && this.subscribers.has(message.stream)) {
           const callback = this.subscribers.get(message.stream);
+          console.log('📞 Calling callback for stream:', message.stream);
           callback(message.data);
+        }
+        // Handle direct stream messages (individual streams like bookTicker)
+        else if (message.s && message.b && message.a) {
+          // This is a bookTicker message with symbol 's', bid 'b', ask 'a'
+          const symbol = message.s.toLowerCase();
+          const streamName = `${symbol}@bookTicker`;
+          
+          if (this.subscribers.has(streamName)) {
+            const callback = this.subscribers.get(streamName);
+            console.log('📞 Calling callback for bookTicker stream:', streamName);
+            callback(message);
+          } else {
+            console.log('⚠️ No subscriber for bookTicker stream:', streamName);
+          }
+        }
+        // Handle subscription confirmation messages
+        else if (message.result !== undefined && message.id) {
+          console.log('✅ WebSocket subscription confirmation:', message);
+        }
+        else {
+          console.log('⚠️ Unhandled message format:', message);
         }
       } catch (error) {
         console.error('WebSocket message parsing error:', error);
@@ -208,18 +237,18 @@ class BinanceAPI {
   }
 
   subscribeToStream(stream, callback, addToSubscribers = true) {
+    if (addToSubscribers) {
+      this.subscribers.set(stream, callback);
+    }
+    
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.initWebSocket();
       
       // Wait for connection and then subscribe
       setTimeout(() => {
-        this.subscribeToStream(stream, callback, addToSubscribers);
+        this.subscribeToStream(stream, callback, false);
       }, 1000);
       return;
-    }
-    
-    if (addToSubscribers) {
-      this.subscribers.set(stream, callback);
     }
     
     const subscribeMessage = {
@@ -242,6 +271,8 @@ class BinanceAPI {
     const stream = `${symbol.toLowerCase()}@bookTicker`;
     this.subscribeToStream(stream, callback);
   }
+
+
 
   // Unsubscribe from stream
   unsubscribeFromStream(stream) {

@@ -6,6 +6,7 @@
     <title>SimpleCryptoDesk</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.24/dist/full.min.css" rel="stylesheet" type="text/css" />
+
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -18,9 +19,17 @@
             </div>
             <div class="navbar-center">
                 <div class="flex items-center gap-2">
-                    <div class="badge badge-success" x-show="isConnected">Connected</div>
-                    <div class="badge badge-error" x-show="!isConnected">Disconnected</div>
-                    <div class="badge badge-warning" x-show="isTestnet">Testnet</div>
+                    <div class="badge badge-success" x-show="isConnected && !isLoadingData && !isInitializing">Connected</div>
+                    <div class="badge badge-error" x-show="!isConnected && !isLoadingData && !isInitializing">Disconnected</div>
+                    <div class="badge badge-warning" x-show="isTestnet && !isLoadingData && !isInitializing">Testnet</div>
+                    <div class="badge badge-info" x-show="isInitializing">
+                        <span class="loading loading-spinner loading-xs mr-1"></span>
+                        Initializing...
+                    </div>
+                    <div class="badge badge-info" x-show="isLoadingData">
+                        <span class="loading loading-spinner loading-xs mr-1"></span>
+                        Loading data...
+                    </div>
                 </div>
             </div>
             <div class="navbar-end">
@@ -76,6 +85,8 @@
                 </div>
             </div>
 
+
+
             <!-- Trading Interface -->
             <div class="grid md:grid-cols-2 gap-4">
                 <!-- Symbol Selection -->
@@ -87,12 +98,40 @@
                                 <span class="label-text">Symbol</span>
                                 <button class="btn btn-xs btn-ghost" @click="refreshSymbols()">Refresh</button>
                             </label>
-                            <select class="select select-bordered w-full" x-model="selectedSymbol" @change="onSymbolChange()">
-                                <option value="">Choose symbol...</option>
-                                <template x-for="symbol in symbols" :key="symbol">
-                                    <option :value="symbol" x-text="symbol"></option>
-                                </template>
-                            </select>
+                            <div class="dropdown dropdown-bottom w-full relative">
+                                <input 
+                                    type="text" 
+                                    placeholder="Type to search symbols (e.g. BTC, ETH)..." 
+                                    class="input input-bordered w-full pr-10" 
+                                    x-model="symbolSearch"
+                                    @input="filterSymbols()"
+                                    @focus="showSymbolDropdown = true; if (!symbolSearch) symbolSearch = ''"
+                                    @blur="setTimeout(() => showSymbolDropdown = false, 200)"
+                                    autocomplete="off"
+                                />
+                                <button 
+                                    x-show="symbolSearch"
+                                    @click="clearSymbolSearch()"
+                                    class="absolute right-2 top-1/2 transform -translate-y-1/2 btn btn-ghost btn-xs"
+                                    type="button"
+                                >
+                                    ✕
+                                </button>
+                                <div x-show="showSymbolDropdown && filteredSymbols.length > 0" 
+                                     class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full max-h-60 overflow-y-auto">
+                                    <template x-for="symbol in filteredSymbols.slice(0, 20)" :key="symbol">
+                                        <li>
+                                            <a @click="selectSymbol(symbol)" x-text="symbol" class="text-sm"></a>
+                                        </li>
+                                    </template>
+                                    <li x-show="filteredSymbols.length > 20" class="text-xs text-base-content/60 px-4 py-2">
+                                        <span>Showing first 20 results. Keep typing to narrow down...</span>
+                                    </li>
+                                    <li x-show="filteredSymbols.length === 0 && symbolSearch.length > 0" class="text-xs text-base-content/60 px-4 py-2">
+                                        <span>No symbols found matching your search</span>
+                                    </li>
+                                </div>
+                            </div>
                         </div>
                         <button class="btn btn-sm btn-primary" @click="refreshPrice()" :disabled="!selectedSymbol">
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,15 +204,24 @@
         <div x-show="activeTab === 'pnl'" class="space-y-4">
             <div class="flex justify-between items-center">
                 <h2 class="text-2xl font-bold">Portfolio P&L</h2>
-                <button class="btn btn-primary btn-sm" @click="calculatePnL()">Refresh P&L</button>
+                <div class="flex gap-2">
+                    <button class="btn btn-ghost btn-sm" @click="debugTradeData()" title="Debug Trade Data">
+                        🔍 Debug
+                    </button>
+                    <button class="btn btn-primary btn-sm" @click="refreshAllData()" :disabled="isLoadingData">
+                        <span x-show="!isLoadingData">🔄 Refresh All Data</span>
+                        <span x-show="isLoadingData" class="loading loading-spinner loading-sm"></span>
+                        <span x-show="isLoadingData">Loading...</span>
+                    </button>
+                </div>
             </div>
             
             <!-- P&L Summary -->
             <div class="stats shadow w-full">
                 <div class="stat">
-                    <div class="stat-title">Total Portfolio Value</div>
+                    <div class="stat-title">Portfolio Value</div>
                     <div class="stat-value" x-text="'$' + totalPortfolioValue.toFixed(2)"></div>
-                    <div class="stat-desc">Current market value</div>
+                    <div class="stat-desc">Current holdings</div>
                 </div>
                 <div class="stat">
                     <div class="stat-title">Total P&L</div>
@@ -181,42 +229,77 @@
                     <div class="stat-desc" :class="totalPnLPercent >= 0 ? 'text-success' : 'text-error'" x-text="totalPnLPercent.toFixed(2) + '%'"></div>
                 </div>
                 <div class="stat">
-                    <div class="stat-title">Positions</div>
+                    <div class="stat-title">Realized P&L</div>
+                    <div class="stat-value" :class="totalRealizedPnL >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (totalRealizedPnL || 0).toFixed(2)"></div>
+                    <div class="stat-desc">From completed trades</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Unrealized P&L</div>
+                    <div class="stat-value" :class="totalUnrealizedPnL >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (totalUnrealizedPnL || 0).toFixed(2)"></div>
+                    <div class="stat-desc">Current positions</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Active Positions</div>
                     <div class="stat-value" x-text="portfolio.filter(p => p.totalQuantity > 0).length"></div>
-                    <div class="stat-desc">Active positions</div>
+                    <div class="stat-desc" x-text="'Total symbols: ' + portfolio.length"></div>
                 </div>
             </div>
 
             <!-- Portfolio Table -->
             <div class="card bg-base-200 shadow-xl">
                 <div class="card-body">
+                    <h3 class="card-title mb-4">Portfolio Positions</h3>
                     <div class="overflow-x-auto">
                         <table class="table table-sm">
                             <thead>
                                 <tr>
                                     <th>Symbol</th>
                                     <th>Quantity</th>
-                                    <th>Avg Buy Price</th>
+                                    <th>Avg Price</th>
                                     <th>Current Price</th>
-                                    <th>Value</th>
-                                    <th>P&L</th>
-                                    <th>P&L %</th>
+                                    <th>Market Value</th>
+                                    <th>Realized P&L</th>
+                                    <th>Unrealized P&L</th>
+                                    <th>Total P&L</th>
+                                    <th>Total P&L %</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="position in portfolio.filter(p => p.totalQuantity > 0)" :key="position.symbol">
+                                <template x-for="position in (portfolio || [])" :key="position.symbol">
                                     <tr>
-                                        <td x-text="position.symbol"></td>
-                                        <td x-text="position.totalQuantity.toFixed(8)"></td>
-                                        <td x-text="'$' + position.averagePrice.toFixed(4)"></td>
+                                        <td>
+                                            <div class="font-semibold" x-text="position.symbol"></div>
+                                            <div class="text-xs text-base-content/60" x-text="position.trades.length + ' trades'"></div>
+                                        </td>
+                                        <td>
+                                            <span x-text="position.totalQuantity.toFixed(8)"></span>
+                                            <span x-show="position.totalQuantity <= 0" class="badge badge-sm badge-outline">Closed</span>
+                                        </td>
+                                        <td x-text="position.averagePrice > 0 ? '$' + position.averagePrice.toFixed(4) : '--'"></td>
                                         <td x-text="'$' + (position.currentPrice || 0).toFixed(4)"></td>
                                         <td x-text="'$' + (position.currentValue || 0).toFixed(2)"></td>
-                                        <td :class="(position.pnl || 0) >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (position.pnl || 0).toFixed(2)"></td>
-                                        <td :class="(position.pnlPercent || 0) >= 0 ? 'text-success' : 'text-error'" x-text="(position.pnlPercent || 0).toFixed(2) + '%'"></td>
+                                        <td :class="(position.realizedPnL || 0) >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (position.realizedPnL || 0).toFixed(2)"></td>
+                                        <td :class="(position.unrealizedPnL || 0) >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (position.unrealizedPnL || 0).toFixed(2)"></td>
+                                        <td :class="(position.totalPnL || 0) >= 0 ? 'text-success' : 'text-error'">
+                                            <div class="font-semibold" x-text="'$' + (position.totalPnL || 0).toFixed(2)"></div>
+                                        </td>
+                                        <td :class="(position.totalPnLPercent || 0) >= 0 ? 'text-success' : 'text-error'">
+                                            <div class="font-semibold" x-text="(position.totalPnLPercent || 0).toFixed(2) + '%'"></div>
+                                        </td>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
+                    </div>
+                    <div x-show="portfolio.length === 0 && !isLoadingData && !isInitializing" class="text-center py-8 text-base-content/60">
+                        No trading positions found. Start trading to see your portfolio here.
+                    </div>
+                    <div x-show="portfolio.length === 0 && (isLoadingData || isInitializing)" class="text-center py-8">
+                        <div class="loading loading-spinner loading-lg"></div>
+                        <div class="text-base-content/60 mt-4">
+                            <span x-show="isInitializing">Initializing app...</span>
+                            <span x-show="isLoadingData">Loading portfolio data...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -227,7 +310,11 @@
             <div class="flex justify-between items-center">
                 <h2 class="text-2xl font-bold">Trade History</h2>
                 <div class="flex gap-2">
-                    <button class="btn btn-primary btn-sm" @click="loadTrades()">Refresh</button>
+                    <button class="btn btn-primary btn-sm" @click="refreshAllData()" :disabled="isLoadingData">
+                        <span x-show="!isLoadingData">🔄 Refresh All Data</span>
+                        <span x-show="isLoadingData" class="loading loading-spinner loading-sm"></span>
+                        <span x-show="isLoadingData">Loading...</span>
+                    </button>
                     <button class="btn btn-error btn-sm" @click="confirmClearTrades()">Clear All</button>
                 </div>
             </div>
@@ -286,8 +373,15 @@
                             </tbody>
                         </table>
                     </div>
-                    <div x-show="trades.length === 0" class="text-center py-8 text-base-content/60">
+                    <div x-show="trades.length === 0 && !isLoadingData && !isInitializing" class="text-center py-8 text-base-content/60">
                         No trades found. Start trading to see history here.
+                    </div>
+                    <div x-show="trades.length === 0 && (isLoadingData || isInitializing)" class="text-center py-8">
+                        <div class="loading loading-spinner loading-lg"></div>
+                        <div class="text-base-content/60 mt-4">
+                            <span x-show="isInitializing">Initializing app...</span>
+                            <span x-show="isLoadingData">Loading trade history...</span>
+                        </div>
                     </div>
                 </div>
             </div>

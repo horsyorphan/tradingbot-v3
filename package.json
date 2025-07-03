@@ -9,6 +9,8 @@
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --mac --win --linux",
     "postinstall": "electron-builder install-app-deps",
     "generate-icons": "node scripts/generate-icons.js"
   },
@@ -43,16 +45,32 @@
       "node_modules/**/*"
     ],
     "mac": {
-      "target": "dmg",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
       "icon": "src/renderer/icons/logo.png",
+      "category": "public.app-category.finance",
       "extendInfo": {
         "CFBundleDisplayName": "Doggy&Tutu Trade",
         "CFBundleName": "Doggy&Tutu Trade"
       }
     },
     "win": {
-      "target": "nsis",
-      "icon": "src/renderer/icons/logo.png"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "ia32"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64", "ia32"]
+        }
+      ],
+      "icon": "src/renderer/icons/logo.png",
+      "publisherName": "Doggy&Tutu Trade"
     },
     "linux": {
       "target": "AppImage",

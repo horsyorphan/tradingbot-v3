@@ -1,0 +1,243 @@
+/* Additional custom styles for SimpleCryptoDesk */
+
+/* Smooth transitions */
+* {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--bc) / 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--bc) / 0.3);
+}
+
+/* Price update animations */
+.price-update {
+  animation: pulse 0.3s ease-in-out;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Loading spinner */
+.loading {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Toast improvements */
+.toast .alert {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+/* Table hover effects */
+.table tbody tr:hover {
+  background-color: hsl(var(--b2));
+}
+
+/* Form improvements */
+.form-control input:focus,
+.form-control select:focus {
+  outline: 2px solid hsl(var(--p));
+  outline-offset: 2px;
+}
+
+/* Button hover effects */
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+/* Card hover effects */
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Stats cards */
+.stats .stat {
+  padding: 1.5rem;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+  
+  .stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .grid.md\\:grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dark theme improvements */
+[data-theme="dark"] {
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+/* Light theme improvements */
+[data-theme="light"] {
+  --glass-bg: rgba(0, 0, 0, 0.05);
+  --glass-border: rgba(0, 0, 0, 0.1);
+}
+
+/* Glass effect */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+}
+
+/* Success/Error indicators */
+.text-success {
+  color: hsl(var(--su)) !important;
+}
+
+.text-error {
+  color: hsl(var(--er)) !important;
+}
+
+/* Connection status indicator */
+.badge {
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* Modal improvements */
+.modal-box {
+  max-width: 32rem;
+  background: hsl(var(--b1));
+  border: 1px solid hsl(var(--b3));
+}
+
+/* Theme controller improvements */
+.theme-controller {
+  text-align: left;
+}
+
+/* Tab improvements */
+.tabs-boxed .tab {
+  font-weight: 500;
+}
+
+.tabs-boxed .tab-active {
+  font-weight: 600;
+}
+
+/* Price display improvements */
+.stat-value {
+  font-family: 'JetBrains Mono', 'Monaco', 'Courier New', monospace;
+  font-weight: 700;
+}
+
+/* Order form improvements */
+.trading-form {
+  background: var(--glass-bg);
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+/* Portfolio table improvements */
+.portfolio-table {
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-table .stat-value {
+  font-size: 1.125rem;
+}
+
+/* Notification improvements */
+.alert {
+  border-radius: 0.75rem;
+  font-weight: 500;
+}
+
+/* Loading states */
+.btn.loading {
+  pointer-events: none;
+}
+
+.btn.loading::after {
+  content: "";
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.5rem;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Focus improvements */
+*:focus {
+  outline: 2px solid hsl(var(--p));
+  outline-offset: 2px;
+  outline-style: solid;
+}
+
+.btn:focus,
+.input:focus,
+.select:focus {
+  outline: 2px solid hsl(var(--p));
+  outline-offset: 2px;
+}
+
+/* Print styles */
+@media print {
+  .navbar,
+  .tabs,
+  .btn,
+  .modal,
+  .toast {
+    display: none !important;
+  }
+  
+  .card {
+    border: 1px solid #ccc;
+    box-shadow: none;
+  }
+} 

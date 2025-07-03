@@ -1,0 +1,52 @@
+{
+  "name": "simplecryptodesk",
+  "version": "1.0.0",
+  "description": "A lightweight desktop crypto trading app for Binance",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "keywords": [
+    "crypto",
+    "trading",
+    "binance",
+    "electron",
+    "desktop"
+  ],
+  "author": "SimpleCryptoDesk",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "lowdb": "^1.0.0",
+    "keytar": "^7.9.0",
+    "ws": "^8.14.2",
+    "node-fetch": "^2.7.0"
+  },
+  "build": {
+    "appId": "com.simplecryptodesk.app",
+    "productName": "SimpleCryptoDesk",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    }
+  }
+} 

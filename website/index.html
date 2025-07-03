@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doggy&Tutu Trade - Crypto Trading Desktop App</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    <link rel="apple-touch-icon" href="assets/logo.png">
+    
+    <!-- TailwindCSS and DaisyUI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.24/dist/full.min.css" rel="stylesheet" type="text/css" />
+    
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Custom styles -->
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: hsl(var(--bc) / 0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: hsl(var(--bc) / 0.3);
+        }
+        
+        /* Smooth transitions */
+        * {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        /* Hero background */
+        .hero-gradient {
+            background: url('assets/background.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        
+        /* Feature cards hover effect */
+        .feature-card:hover {
+            transform: translateY(-4px);
+        }
+        
+        /* Download button styles */
+        .download-btn {
+            background: linear-gradient(135deg, hsl(var(--p)) 0%, hsl(var(--s)) 100%);
+            border: none;
+        }
+        
+        .download-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px hsl(var(--p) / 0.3);
+        }
+    </style>
+</head>
+<body class="bg-base-100 min-h-screen">
+    <div x-data="{ 
+        activeTab: 'features',
+        showDownloadModal: false,
+        selectedOS: null,
+        openDownload(os) {
+            this.selectedOS = os;
+            this.showDownloadModal = true;
+        }
+    }">
+        <!-- Navigation -->
+        <div class="navbar bg-base-200 shadow-lg">
+            <div class="navbar-start">
+                <div class="flex items-center gap-3">
+                    <div class="avatar">
+                        <div class="w-10 h-10 rounded-full">
+                            <img src="assets/logo.png" alt="Doggy&Tutu Trade Logo" class="w-full h-full object-cover">
+                        </div>
+                    </div>
+                    <h1 class="text-xl font-bold">Doggy&Tutu Trade</h1>
+                </div>
+            </div>
+            <div class="navbar-center hidden lg:flex">
+                <ul class="menu menu-horizontal px-1">
+                    <li><a href="#features" @click="activeTab = 'features'">Features</a></li>
+                    <li><a href="#download" @click="activeTab = 'download'">Download</a></li>
+                    <li><a href="#about" @click="activeTab = 'about'">About</a></li>
+                </ul>
+            </div>
+            <div class="navbar-end">
+            </div>
+        </div>
+
+        <!-- Hero Section -->
+        <div class="hero min-h-screen hero-gradient">
+            <div class="hero-content text-center text-white">
+                <div class="max-w-4xl">
+                    <div class="avatar mb-8">
+                        <div class="w-24 h-24 rounded-full ring ring-white ring-offset-base-100 ring-offset-2">
+                            <img src="assets/logo.png" alt="Doggy&Tutu Trade" class="w-full h-full object-cover">
+                        </div>
+                    </div>
+                    <h1 class="text-5xl font-bold mb-6">Doggy&Tutu Trade</h1>
+                    <p class="text-xl mb-8 opacity-90">
+                        A lightweight desktop crypto trading application for Binance with local trade logging and P&L tracking.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                        <button @click="openDownload('mac')" class="btn btn-lg download-btn text-white">
+                            <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                            </svg>
+                            Download for Mac
+                        </button>
+                        <button @click="openDownload('windows')" class="btn btn-lg download-btn text-white">
+                            <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.852"/>
+                            </svg>
+                            Download for Windows
+                        </button>
+                    </div>
+                    <div class="mt-8">
+                        <div class="stats stats-horizontal bg-white/10 backdrop-blur-lg">
+                            <div class="stat">
+                                <div class="stat-title text-white/80">Platform</div>
+                                <div class="stat-value text-white">Desktop</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title text-white/80">License</div>
+                                <div class="stat-value text-white">MIT</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-title text-white/80">Framework</div>
+                                <div class="stat-value text-white">Electron</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features Section -->
+        <div id="features" class="py-20 bg-base-100">
+            <div class="container mx-auto px-4">
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl font-bold mb-4">Key Features</h2>
+                    <p class="text-xl opacity-70">Everything you need for crypto trading in one desktop app</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Feature Card 1 -->
+                    <div class="card bg-base-200 shadow-xl feature-card">
+                        <div class="card-body text-center">
+                            <div class="text-4xl mb-4">🔐</div>
+                            <h3 class="card-title justify-center">Secure Trading</h3>
+                            <p>Encrypted API key storage with OS-level credential management. Your keys never leave your device.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Feature Card 2 -->
+                    <div class="card bg-base-200 shadow-xl feature-card">
+                        <div class="card-body text-center">
+                            <div class="text-4xl mb-4">⚡</div>
+                            <h3 class="card-title justify-center">Real-time Data</h3>
+                            <p>Live price feeds via WebSocket connection. Get instant market updates and execute trades quickly.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Feature Card 3 -->
+                    <div class="card bg-base-200 shadow-xl feature-card">
+                        <div class="card-body text-center">
+                            <div class="text-4xl mb-4">📊</div>
+                            <h3 class="card-title justify-center">P&L Tracking</h3>
+                            <p>Comprehensive profit and loss tracking with portfolio overview and trade history analysis.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Feature Card 4 -->
+                    <div class="card bg-base-200 shadow-xl feature-card">
+                        <div class="card-body text-center">
+                            <div class="text-4xl mb-4">💾</div>
+                            <h3 class="card-title justify-center">Local Storage</h3>
+                            <p>All data stored locally with SQLite-like JSON storage. No cloud dependency, complete privacy.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Feature Card 5 -->
+                    <div class="card bg-base-200 shadow-xl feature-card">
+                        <div class="card-body text-center">
+                            <div class="text-4xl mb-4">🧪</div>
+                            <h3 class="card-title justify-center">Testnet Support</h3>
+                            <p>Safe testing environment with Binance testnet. Practice trading without risking real money.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Feature Card 6 -->
+                    <div class="card bg-base-200 shadow-xl feature-card">
+                        <div class="card-body text-center">
+                            <div class="text-4xl mb-4">🎨</div>
+                            <h3 class="card-title justify-center">Modern UI</h3>
+                            <p>Beautiful interface with multiple themes, responsive design, and intuitive user experience.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Download Section -->
+        <div id="download" class="py-20 bg-base-200">
+            <div class="container mx-auto px-4">
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl font-bold mb-4">Download Now</h2>
+                    <p class="text-xl opacity-70">Get started with crypto trading on your desktop</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                    <!-- macOS Download -->
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body text-center">
+                            <svg class="w-16 h-16 mx-auto mb-4 text-primary" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                            </svg>
+                            <h3 class="text-2xl font-bold mb-2">macOS</h3>
+                            <p class="mb-6">Compatible with Intel and Apple Silicon Macs</p>
+                            <button @click="openDownload('mac')" class="btn btn-primary btn-block">
+                                Download for macOS
+                            </button>
+                            <div class="text-sm opacity-60 mt-2">
+                                Supports macOS 10.15+
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Windows Download -->
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body text-center">
+                            <svg class="w-16 h-16 mx-auto mb-4 text-primary" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.852"/>
+                            </svg>
+                            <h3 class="text-2xl font-bold mb-2">Windows</h3>
+                            <p class="mb-6">Available for 32-bit and 64-bit systems</p>
+                            <button @click="openDownload('windows')" class="btn btn-primary btn-block">
+                                Download for Windows
+                            </button>
+                            <div class="text-sm opacity-60 mt-2">
+                                Supports Windows 10+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- System Requirements -->
+                <div class="mt-16">
+                    <div class="card bg-base-100 shadow-xl max-w-2xl mx-auto">
+                        <div class="card-body">
+                            <h3 class="card-title justify-center mb-4">System Requirements</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <h4 class="font-semibold mb-2">Minimum Requirements:</h4>
+                                    <ul class="text-sm opacity-70 space-y-1">
+                                        <li>• 4GB RAM</li>
+                                        <li>• 100MB free storage</li>
+                                        <li>• Internet connection</li>
+                                        <li>• Binance account</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h4 class="font-semibold mb-2">Recommended:</h4>
+                                    <ul class="text-sm opacity-70 space-y-1">
+                                        <li>• 8GB RAM</li>
+                                        <li>• SSD storage</li>
+                                        <li>• Stable internet</li>
+                                        <li>• Multiple monitors</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- About Section -->
+        <div id="about" class="py-20 bg-base-100">
+            <div class="container mx-auto px-4">
+                <div class="max-w-4xl mx-auto">
+                    <div class="text-center mb-16">
+                        <h2 class="text-4xl font-bold mb-4">About Doggy&Tutu Trade</h2>
+                        <p class="text-xl opacity-70">Built for traders who value privacy, security, and simplicity</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                        <div>
+                            <h3 class="text-2xl font-bold mb-4">Why Choose Our Trading App?</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-start gap-3">
+                                    <div class="badge badge-success mt-1">✓</div>
+                                    <div>
+                                        <h4 class="font-semibold">Privacy First</h4>
+                                        <p class="text-sm opacity-70">All data stays on your device. No cloud servers, no data collection.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="badge badge-success mt-1">✓</div>
+                                    <div>
+                                        <h4 class="font-semibold">Lightweight</h4>
+                                        <p class="text-sm opacity-70">Small footprint with fast performance and minimal resource usage.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="badge badge-success mt-1">✓</div>
+                                    <div>
+                                        <h4 class="font-semibold">No Fees</h4>
+                                        <p class="text-sm opacity-70">Free to use forever. Only pay Binance's standard trading fees.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <div class="badge badge-success mt-1">✓</div>
+                                    <div>
+                                        <h4 class="font-semibold">Cross Platform</h4>
+                                        <p class="text-sm opacity-70">Works on macOS, Windows, and Linux with native performance.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card bg-base-200 shadow-xl">
+                            <div class="card-body">
+                                <h3 class="card-title">Getting Started</h3>
+                                <div class="steps steps-vertical">
+                                    <div class="step step-primary">Download the app</div>
+                                    <div class="step step-primary">Install on your computer</div>
+                                    <div class="step step-primary">Enter Binance API keys</div>
+                                    <div class="step step-primary">Start trading!</div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer footer-center p-10 bg-base-200 text-base-content">
+            <div>
+                <div class="avatar mb-4">
+                    <div class="w-12 h-12 rounded-full">
+                        <img src="assets/logo.png" alt="Doggy&Tutu Trade">
+                    </div>
+                </div>
+                <p class="font-bold">
+                    Doggy&Tutu Trade
+                    <br>Providing secure crypto trading since 2024
+                </p>
+                <p class="opacity-60">Built with ❤️ for the crypto community</p>
+            </div>
+
+            <div>
+                <p class="text-sm opacity-50">
+                    ⚠️ Disclaimer: Cryptocurrency trading involves substantial risk. 
+                    This software is for educational purposes only.
+                </p>
+            </div>
+        </footer>
+
+        <!-- Download Modal -->
+        <dialog class="modal" :class="{ 'modal-open': showDownloadModal }">
+            <div class="modal-box">
+                <h3 class="font-bold text-lg mb-4">
+                    Download Doggy&Tutu Trade for 
+                    <span x-text="selectedOS === 'mac' ? 'macOS' : 'Windows'"></span>
+                </h3>
+                
+                <div class="alert alert-info mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span>Downloads will be available soon! The application is currently in development.</span>
+                </div>
+                
+                <div class="space-y-3">
+                    <div x-show="selectedOS === 'mac'">
+                        <h4 class="font-semibold">macOS Download Options:</h4>
+                        <div class="space-y-2">
+                            <button class="btn btn-outline btn-block" disabled>
+                                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                                </svg>
+                                Download DMG (Universal) - Coming Soon
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div x-show="selectedOS === 'windows'">
+                        <h4 class="font-semibold">Windows Download Options:</h4>
+                        <div class="space-y-2">
+                            <button class="btn btn-outline btn-block" disabled>
+                                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.852"/>
+                                </svg>
+                                Download EXE (64-bit) - Coming Soon
+                            </button>
+                            <button class="btn btn-outline btn-block" disabled>
+                                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-13.051-1.852"/>
+                                </svg>
+                                Portable Version - Coming Soon
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <h4 class="font-semibold mb-2">Want to try it now?</h4>
+                    <p class="text-sm opacity-70 mb-3">Please check back soon for download availability.</p>
+                </div>
+                
+                <div class="modal-action">
+                    <button class="btn" @click="showDownloadModal = false">Close</button>
+                </div>
+            </div>
+        </dialog>
+    </div>
+</body>
+</html>

@@ -19,6 +19,7 @@ class BinanceAPI {
     
     this.ws = null;
     this.subscribers = new Map();
+    this.pendingSubscriptions = new Set();
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
   }
@@ -156,7 +157,9 @@ class BinanceAPI {
 
   // WebSocket Methods
   initWebSocket() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    // Prevent multiple connection attempts
+    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
+      console.log('⚠️ WebSocket already connecting/connected, skipping...');
       return;
     }
 
@@ -164,15 +167,37 @@ class BinanceAPI {
     this.ws = new WebSocket(this.wsURL);
     
     this.ws.on('open', () => {
-      console.log('WebSocket connected successfully');
+      console.log('✅ WebSocket connected successfully');
       this.reconnectAttempts = 0;
       
-      // Resubscribe to all existing subscriptions
-      console.log('Resubscribing to', this.subscribers.size, 'streams');
-      this.subscribers.forEach((callback, stream) => {
-        console.log('Resubscribing to stream:', stream);
-        this.subscribeToStream(stream, callback, false);
-      });
+      // Process pending subscriptions first
+      if (this.pendingSubscriptions && this.pendingSubscriptions.size > 0) {
+        console.log('📋 Processing', this.pendingSubscriptions.size, 'pending subscriptions');
+        this.pendingSubscriptions.forEach(stream => {
+          console.log('📡 Sending pending subscription for:', stream);
+          const subscribeMessage = {
+            method: 'SUBSCRIBE',
+            params: [stream],
+            id: Date.now()
+          };
+          this.ws.send(JSON.stringify(subscribeMessage));
+        });
+        this.pendingSubscriptions.clear();
+      }
+      
+      // Resubscribe to all existing subscriptions (for reconnection scenarios)
+      if (this.subscribers.size > 0) {
+        console.log('🔄 Resubscribing to', this.subscribers.size, 'existing streams');
+        this.subscribers.forEach((callback, stream) => {
+          console.log('🔄 Resubscribing to stream:', stream);
+          const subscribeMessage = {
+            method: 'SUBSCRIBE',
+            params: [stream],
+            id: Date.now()
+          };
+          this.ws.send(JSON.stringify(subscribeMessage));
+        });
+      }
     });
     
     this.ws.on('message', (data) => {
@@ -241,13 +266,25 @@ class BinanceAPI {
       this.subscribers.set(stream, callback);
     }
     
+    // If WebSocket is not open, initialize it and wait for connection
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      this.initWebSocket();
+      console.log('📡 WebSocket not ready, initializing for stream:', stream);
       
-      // Wait for connection and then subscribe
-      setTimeout(() => {
-        this.subscribeToStream(stream, callback, false);
-      }, 1000);
+      // Only initialize if not already connecting
+      if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+        this.initWebSocket();
+      }
+      
+      // Wait for connection and then subscribe (only if not already waiting)
+      if (!this.pendingSubscriptions) {
+        this.pendingSubscriptions = new Set();
+      }
+      
+      if (!this.pendingSubscriptions.has(stream)) {
+        this.pendingSubscriptions.add(stream);
+        console.log('📋 Queuing subscription for:', stream);
+      }
+      
       return;
     }
     
@@ -257,6 +294,7 @@ class BinanceAPI {
       id: Date.now()
     };
     
+    console.log('📡 Sending subscription for stream:', stream);
     this.ws.send(JSON.stringify(subscribeMessage));
   }
 
@@ -298,6 +336,7 @@ class BinanceAPI {
       this.ws = null;
     }
     this.subscribers.clear();
+    this.pendingSubscriptions.clear();
   }
 
   // Test API connection

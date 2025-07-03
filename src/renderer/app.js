@@ -65,42 +65,42 @@ function cryptoApp() {
     },
 
     get individualTrades() {
-      if (!this.trades || this.trades.length === 0) return [];
+      if (!this.portfolio || this.portfolio.length === 0) return [];
       
-      // Get all successful BUY trades and calculate individual P&L
-      const buyTrades = this.trades
-        .filter(trade => trade.success && trade.side === 'BUY')
-        .map(trade => {
-          const symbol = trade.symbol;
-          const quantity = parseFloat(trade.quantity) || 0;
-          const buyPrice = parseFloat(trade.effectivePrice || trade.price) || 0;
-          const commission = parseFloat(trade.commission) || 0;
-          
-          // Get current price from portfolio data or symbol prices
-          let currentPrice = 0;
-          const portfolioPosition = this.portfolio.find(p => p.symbol === symbol);
-          if (portfolioPosition) {
-            currentPrice = portfolioPosition.currentPrice || 0;
-          }
-          
-          // Calculate individual trade P&L
-          const marketValue = quantity * currentPrice;
-          const costBasis = quantity * buyPrice;
-          const unrealizedPnL = marketValue - costBasis;
-          const pnlPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0;
-          
-          return {
-            ...trade,
-            currentPrice: currentPrice,
-            marketValue: marketValue,
-            unrealizedPnL: unrealizedPnL,
-            pnlPercent: pnlPercent,
-            costBasis: costBasis
-          };
-        })
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // Most recent first
+      // Get individual lots from FIFO processing
+      const individualLots = [];
       
-      return buyTrades;
+      this.portfolio.forEach(position => {
+        if (position.lots && position.lots.length > 0) {
+          position.lots.forEach(lot => {
+            const currentPrice = position.currentPrice || 0;
+            const marketValue = lot.quantity * currentPrice;
+            const costBasis = lot.quantity * lot.price;
+            const unrealizedPnL = marketValue - costBasis;
+            const pnlPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0;
+            
+            individualLots.push({
+              timestamp: lot.timestamp,
+              symbol: position.symbol,
+              side: 'BUY',
+              quantity: lot.quantity.toString(),
+              price: lot.price.toString(),
+              effectivePrice: lot.price.toString(),
+              commission: lot.commission.toString(),
+              commissionAsset: lot.commissionAsset,
+              currentPrice: currentPrice,
+              marketValue: marketValue,
+              unrealizedPnL: unrealizedPnL,
+              pnlPercent: pnlPercent,
+              costBasis: costBasis,
+              isLot: true // Flag to identify FIFO lots
+            });
+          });
+        }
+      });
+      
+      // Sort by timestamp (most recent first)
+      return individualLots.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     },
 
     // Initialization
@@ -786,7 +786,8 @@ function cryptoApp() {
               totalCommission: 0,
               trades: [],
               buyTrades: [],
-              sellTrades: []
+              sellTrades: [],
+              lots: [] // FIFO: Track individual purchase lots
             };
           }
           
@@ -795,20 +796,37 @@ function cryptoApp() {
           position.totalCommission += commission;
           
           if (trade.side === 'BUY') {
-            // Add to position using effective price
+            console.log(`\n🟢 BUY TRADE (FIFO):`);
+            console.log(`Buying ${quantity} ${symbol} at effective price $${priceForCalculation} (commission: ${commission})`);
+            
+            // FIFO: Add new lot to the end of the queue
+            // Example: If you buy 10 BTC at $50k, then 5 BTC at $60k, you have 2 lots
+            const newLot = {
+              quantity: quantity,
+              price: priceForCalculation,
+              timestamp: trade.timestamp,
+              originalTrade: trade,
+              commission: commission,
+              commissionAsset: commissionAsset
+            };
+            position.lots.push(newLot);
+            
+            // Update totals
             position.totalQuantity += quantity;
             position.totalCost += quantity * priceForCalculation;
             position.buyTrades.push(trade);
             
-            // Update average price immediately
+            // Recalculate average price
             position.averagePrice = position.totalQuantity > 0 ? position.totalCost / position.totalQuantity : 0;
             
-            console.log(`After BUY: quantity=${position.totalQuantity}, cost=$${position.totalCost}, avg=$${position.averagePrice.toFixed(4)} (includes fees)`);
+            console.log(`Added lot: ${quantity} @ $${priceForCalculation}`);
+            console.log(`Total lots: ${position.lots.length}`);
+            console.log(`After BUY: quantity=${position.totalQuantity}, cost=$${position.totalCost.toFixed(2)}, avg=$${position.averagePrice.toFixed(4)}`);
             
           } else if (trade.side === 'SELL') {
-            console.log(`\n🔴 SELL TRADE ANALYSIS:`);
-            console.log(`Before SELL: quantity=${position.totalQuantity}, totalCost=$${position.totalCost}, avg=$${position.averagePrice.toFixed(4)}`);
-            console.log(`Selling: ${quantity} at effective price $${priceForCalculation}`);
+            console.log(`\n🔴 SELL TRADE (FIFO):`);
+            console.log(`Selling ${quantity} ${symbol} at effective price $${priceForCalculation} (commission: ${commission})`);
+            console.log(`Before SELL: ${position.lots.length} lots, total quantity=${position.totalQuantity}`);
             
             // Validate we have enough quantity to sell
             if (quantity > position.totalQuantity) {
@@ -817,44 +835,70 @@ function cryptoApp() {
               return; // Skip this invalid sell trade
             }
             
-            // Calculate realized P&L for this sale using current average price
-            if (position.totalQuantity > 0 && position.averagePrice > 0) {
-              const costBasisOfSoldQuantity = quantity * position.averagePrice;
-              const proceedsFromSale = quantity * priceForCalculation;
-              const realizedPnLFromSale = proceedsFromSale - costBasisOfSoldQuantity;
+            // FIFO: Sell from oldest lots first
+            let remainingToSell = quantity;
+            let totalCostBasis = 0;
+            let totalProceeds = remainingToSell * priceForCalculation;
+            let lotsToRemove = [];
+            
+            console.log(`Processing FIFO sale of ${remainingToSell} units:`);
+            
+            for (let i = 0; i < position.lots.length && remainingToSell > 0; i++) {
+              const lot = position.lots[i];
+              const soldFromThisLot = Math.min(remainingToSell, lot.quantity);
+              const costBasisFromThisLot = soldFromThisLot * lot.price;
               
-              console.log(`Cost basis of sold quantity: ${quantity} × $${position.averagePrice.toFixed(4)} = $${costBasisOfSoldQuantity.toFixed(2)}`);
-              console.log(`Proceeds from sale: ${quantity} × $${priceForCalculation.toFixed(4)} = $${proceedsFromSale.toFixed(2)}`);
-              console.log(`Realized P&L: $${proceedsFromSale.toFixed(2)} - $${costBasisOfSoldQuantity.toFixed(2)} = $${realizedPnLFromSale.toFixed(2)}`);
+              console.log(`  Lot ${i + 1}: ${soldFromThisLot} of ${lot.quantity} @ $${lot.price.toFixed(4)} = $${costBasisFromThisLot.toFixed(2)} cost basis`);
               
-              position.realizedPnL += realizedPnLFromSale;
-              totalRealizedPnL += realizedPnLFromSale;
+              totalCostBasis += costBasisFromThisLot;
+              remainingToSell -= soldFromThisLot;
+              
+              // Update or remove lot
+              if (soldFromThisLot >= lot.quantity) {
+                // Completely consumed this lot
+                lotsToRemove.push(i);
+                console.log(`    → Lot completely consumed, will remove`);
+              } else {
+                // Partially consumed this lot
+                lot.quantity -= soldFromThisLot;
+                console.log(`    → Lot partially consumed, ${lot.quantity} remaining`);
+              }
             }
             
-            // Update position (sell reduces quantity and proportional cost)
-            const newQuantity = position.totalQuantity - quantity;
-            const newTotalCost = position.totalCost - (quantity * position.averagePrice);
+            // Remove fully consumed lots (in reverse order to maintain indices)
+            for (let i = lotsToRemove.length - 1; i >= 0; i--) {
+              position.lots.splice(lotsToRemove[i], 1);
+            }
             
-            console.log(`Updating position:`);
-            console.log(`  New quantity: ${position.totalQuantity} - ${quantity} = ${newQuantity}`);
-            console.log(`  New total cost: $${position.totalCost.toFixed(2)} - (${quantity} × $${position.averagePrice.toFixed(4)}) = $${newTotalCost.toFixed(2)}`);
+            // Calculate realized P&L from this sale
+            const realizedPnLFromSale = totalProceeds - totalCostBasis;
+            position.realizedPnL += realizedPnLFromSale;
+            totalRealizedPnL += realizedPnLFromSale;
             
-            position.totalQuantity = Math.max(0, newQuantity); // Prevent negative quantities
-            position.totalCost = Math.max(0, newTotalCost); // Prevent negative costs
+            console.log(`FIFO Sale Summary:`);
+            console.log(`  Total cost basis: $${totalCostBasis.toFixed(2)}`);
+            console.log(`  Total proceeds: $${totalProceeds.toFixed(2)}`);
+            console.log(`  Realized P&L: $${totalProceeds.toFixed(2)} - $${totalCostBasis.toFixed(2)} = $${realizedPnLFromSale.toFixed(2)}`);
+            
+            // Update position totals
+            position.totalQuantity -= quantity;
+            position.totalCost -= totalCostBasis;
             position.sellTrades.push(trade);
             
-            // Average price stays the same for remaining position (only quantity and total cost change)
+            // Recalculate average price from remaining lots
             if (position.totalQuantity > 0) {
               position.averagePrice = position.totalCost / position.totalQuantity;
-              console.log(`  New average price: $${position.totalCost.toFixed(2)} ÷ ${position.totalQuantity} = $${position.averagePrice.toFixed(4)}`);
             } else {
               position.averagePrice = 0;
-              position.totalCost = 0; // Clean up any rounding errors
-              console.log(`  Position fully closed - setting avg price and cost to 0`);
+              position.totalCost = 0;
             }
             
-            console.log(`After SELL: quantity=${position.totalQuantity}, cost=$${position.totalCost.toFixed(2)}, avg=$${position.averagePrice.toFixed(4)}`);
-            console.log(`Total realized P&L for ${symbol}: $${position.realizedPnL.toFixed(2)}\n`);
+            console.log(`After FIFO SELL:`);
+            console.log(`  Remaining lots: ${position.lots.length}`);
+            console.log(`  Total quantity: ${position.totalQuantity}`);
+            console.log(`  Total cost: $${position.totalCost.toFixed(2)}`);
+            console.log(`  Average price: $${position.averagePrice.toFixed(4)}`);
+            console.log(`  Total realized P&L: $${position.realizedPnL.toFixed(2)}\n`);
           }
         });
         
@@ -931,9 +975,11 @@ function cryptoApp() {
               position.totalPnLPercent = totalPnLPercent;
               position.totalInvested = totalInvested;
               
-              // Add to portfolio if there are any trades for this symbol
-              if (position.trades.length > 0) {
+              // Add to portfolio if there are any trades for this symbol AND remaining quantity
+              if (position.trades.length > 0 && position.totalQuantity > 0) {
                 this.portfolio.push(position);
+              } else if (position.trades.length > 0 && position.totalQuantity === 0) {
+                console.log(`📋 ${symbol} position fully closed - hiding from portfolio (realized P&L: $${position.realizedPnL.toFixed(2)})`);
               }
               
             } else {
@@ -1054,44 +1100,6 @@ function cryptoApp() {
       console.log('App destroyed');
     },
 
-    // Debug function to inspect trade data
-    debugTradeData() {
-      console.log('🔍 Debug: Trade Data Analysis');
-      console.log(`Total trades: ${this.trades.length}`);
-      
-      const successful = this.trades.filter(t => t.success);
-      const failed = this.trades.filter(t => !t.success);
-      
-      console.log(`Successful trades: ${successful.length}`);
-      console.log(`Failed trades: ${failed.length}`);
-      
-      if (successful.length > 0) {
-        console.log('\n📊 Successful Trades Analysis:');
-        successful.forEach((trade, index) => {
-          console.log(`Trade ${index + 1}:`, {
-            symbol: trade.symbol,
-            side: trade.side,
-            quantity: trade.quantity,
-            price: trade.price,
-            priceType: typeof trade.price,
-            timestamp: trade.timestamp,
-            success: trade.success
-          });
-        });
-        
-        // Check for missing prices
-        const missingPrices = successful.filter(t => !t.price || parseFloat(t.price) === 0);
-        if (missingPrices.length > 0) {
-          console.warn(`⚠️ ${missingPrices.length} trades with missing/zero prices:`, missingPrices);
-        }
-      }
-      
-      return {
-        total: this.trades.length,
-        successful: successful.length,
-        failed: failed.length,
-        missingPrices: successful.filter(t => !t.price || parseFloat(t.price) === 0).length
-      };
-    },
+
   };
 } 

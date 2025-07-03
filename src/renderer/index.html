@@ -205,9 +205,6 @@
             <div class="flex justify-between items-center">
                 <h2 class="text-2xl font-bold">Portfolio P&L</h2>
                 <div class="flex gap-2">
-                    <button class="btn btn-ghost btn-sm" @click="debugTradeData()" title="Debug Trade Data">
-                        🔍 Debug
-                    </button>
                     <button class="btn btn-primary btn-sm" @click="refreshAllData()" :disabled="isLoadingData">
                         <span x-show="!isLoadingData">🔄 Refresh All Data</span>
                         <span x-show="isLoadingData" class="loading loading-spinner loading-sm"></span>
@@ -258,16 +255,13 @@
                             <h3 class="card-title">Portfolio Positions</h3>
                             <div class="text-sm text-base-content/60 mt-1">
                                 <span x-show="!showIndividualTrades">Combined positions with average prices and total P&L</span>
-                                <span x-show="showIndividualTrades">Individual BUY trades with separate P&L for each purchase</span>
+                                <span x-show="showIndividualTrades">FIFO lots showing remaining purchases after sells (oldest first out)</span>
                             </div>
                         </div>
                         <div class="flex gap-2 items-center">
-                            <button class="btn btn-sm btn-outline" @click="calculatePnL()" title="Recalculate P&L with detailed debugging">
-                                🐛 Debug P&L
-                            </button>
                             <div class="form-control">
                                 <label class="label cursor-pointer">
-                                    <span class="label-text mr-2" x-text="showIndividualTrades ? 'Individual Trades' : 'Summary View'"></span>
+                                    <span class="label-text mr-2" x-text="showIndividualTrades ? 'FIFO Lots' : 'Summary View'"></span>
                                     <input type="checkbox" class="toggle toggle-primary" x-model="showIndividualTrades">
                                 </label>
                             </div>
@@ -330,7 +324,7 @@
                                     <th>Symbol</th>
                                     <th>Side</th>
                                     <th>Quantity</th>
-                                    <th>Buy Price</th>
+                                    <th>Lot Price</th>
                                     <th>Current Price</th>
                                     <th>Market Value</th>
                                     <th>Unrealized P&L</th>
@@ -372,14 +366,14 @@
                     </div>
                     <div x-show="(!showIndividualTrades && portfolio.length === 0) || (showIndividualTrades && individualTrades.length === 0) && !isLoadingData && !isInitializing" class="text-center py-8 text-base-content/60">
                         <span x-show="!showIndividualTrades">No trading positions found. Start trading to see your portfolio here.</span>
-                        <span x-show="showIndividualTrades">No individual trades found. Only BUY trades are shown in this view.</span>
+                        <span x-show="showIndividualTrades">No remaining lots found. This view shows unsold portions of your purchases (FIFO lots).</span>
                     </div>
                     <div x-show="((!showIndividualTrades && portfolio.length === 0) || (showIndividualTrades && individualTrades.length === 0)) && (isLoadingData || isInitializing)" class="text-center py-8">
                         <div class="loading loading-spinner loading-lg"></div>
                         <div class="text-base-content/60 mt-4">
                             <span x-show="isInitializing">Initializing app...</span>
                             <span x-show="isLoadingData && !showIndividualTrades">Loading portfolio data...</span>
-                            <span x-show="isLoadingData && showIndividualTrades">Loading individual trades...</span>
+                            <span x-show="isLoadingData && showIndividualTrades">Loading FIFO lots...</span>
                         </div>
                     </div>
                 </div>

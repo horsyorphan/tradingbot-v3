@@ -9,7 +9,8 @@
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "generate-icons": "node scripts/generate-icons.js"
   },
   "keywords": [
     "crypto",
@@ -22,17 +23,18 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^27.0.0",
-    "electron-builder": "^24.6.4"
+    "electron-builder": "^24.6.4",
+    "sharp": "^0.34.2"
   },
   "dependencies": {
-    "lowdb": "^1.0.0",
     "keytar": "^7.9.0",
-    "ws": "^8.14.2",
-    "node-fetch": "^2.7.0"
+    "lowdb": "^1.0.0",
+    "node-fetch": "^2.7.0",
+    "ws": "^8.14.2"
   },
-      "build": {
-      "appId": "com.doggytutu.trade",
-      "productName": "Doggy&Tutu Trade",
+  "build": {
+    "appId": "com.doggytutu.trade",
+    "productName": "Doggy&Tutu Trade",
     "directories": {
       "output": "dist"
     },
@@ -42,11 +44,19 @@
     ],
     "mac": {
       "target": "dmg",
-      "icon": "assets/icon.icns"
+      "icon": "src/renderer/icons/logo.png",
+      "extendInfo": {
+        "CFBundleDisplayName": "Doggy&Tutu Trade",
+        "CFBundleName": "Doggy&Tutu Trade"
+      }
     },
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "src/renderer/icons/logo.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "src/renderer/icons/logo.png"
     }
   }
-} 
+}

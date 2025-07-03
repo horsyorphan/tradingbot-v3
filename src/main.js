@@ -4,6 +4,9 @@ const keytar = require('keytar');
 const BinanceAPI = require('./utils/binance-api');
 const DatabaseManager = require('./utils/database');
 
+// Set app name as early as possible
+app.setName('Doggy&Tutu Trade');
+
 let mainWindow;
 let binanceAPI;
 let dbManager;
@@ -11,15 +14,21 @@ let dbManager;
 const isDev = process.argv.includes('--dev');
 
 function createWindow() {
+  // Define icon path
+  const iconPath = path.join(__dirname, 'renderer', 'icons', 'icon-256.png');
+  console.log('🖼️ Icon path:', iconPath);
+  console.log('🖼️ Icon exists:', require('fs').existsSync(iconPath));
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: 'Doggy&Tutu Trade',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
       enableRemoteModule: true
     },
-    icon: path.join(__dirname, '../assets/icon.png'),
+    icon: iconPath,
     titleBarStyle: 'default',
     show: false
   });
@@ -32,6 +41,15 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    
+    // Set dock icon on macOS
+    if (process.platform === 'darwin') {
+      const dockIconPath = path.join(__dirname, 'renderer', 'icons', 'icon-512.png');
+      if (require('fs').existsSync(dockIconPath)) {
+        app.dock.setIcon(dockIconPath);
+        console.log('🍎 macOS dock icon set:', dockIconPath);
+      }
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -40,10 +58,28 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Set the app name
+  app.setName('Doggy&Tutu Trade');
+  console.log('📱 App name set to:', app.getName());
+  
+  // Set app user model ID for Windows
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.doggytutu.trade');
+  }
+  
   createWindow();
   
   // Initialize database
   dbManager = new DatabaseManager();
+  
+  // Set app icon on startup (additional attempt)
+  if (process.platform === 'darwin') {
+    const appIconPath = path.join(__dirname, 'renderer', 'icons', 'icon-512.png');
+    if (require('fs').existsSync(appIconPath)) {
+      app.dock.setIcon(appIconPath);
+      console.log('🚀 App startup - dock icon set:', appIconPath);
+    }
+  }
   
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

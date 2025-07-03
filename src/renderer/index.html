@@ -219,6 +219,9 @@
             <div class="flex justify-between items-center">
                 <h2 class="text-2xl font-bold">Portfolio P&L</h2>
                 <div class="flex gap-2">
+                    <button class="btn btn-secondary btn-sm" @click="openAddPositionModal()">
+                        ➕ Add Position
+                    </button>
                     <button class="btn btn-primary btn-sm" @click="refreshAllData()" :disabled="isLoadingData">
                         <span x-show="!isLoadingData">🔄 Refresh All Data</span>
                         <span x-show="isLoadingData" class="loading loading-spinner loading-sm"></span>
@@ -256,10 +259,12 @@
                 </div>
                 <div class="stat">
                     <div class="stat-title">Total Fees</div>
-                    <div class="stat-value text-error" x-text="'$' + (totalCommission || 0).toFixed(8)"></div>
+                    <div class="stat-value text-error" x-text="'$' + (totalCommission || 0).toFixed(4)"></div>
                     <div class="stat-desc text-base-content/60">Trading costs</div>
                 </div>
             </div>
+
+
 
             <!-- Portfolio Table -->
             <div class="card bg-base-200 shadow-xl">
@@ -270,6 +275,8 @@
                             <div class="text-sm text-base-content/60 mt-1">
                                 <span x-show="!showIndividualTrades">Combined positions with average prices and total P&L</span>
                                 <span x-show="showIndividualTrades">FIFO lots showing remaining purchases after sells (oldest first out)</span>
+                                <br>
+                                <span class="text-xs">💡 Use "Add Position" to manually track existing holdings or positions from other exchanges</span>
                             </div>
                         </div>
                         <div class="flex gap-2 items-center">
@@ -296,6 +303,7 @@
                                     <th>Total Fees</th>
                                     <th>Total P&L</th>
                                     <th>Total P&L %</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -303,7 +311,10 @@
                                     <tr>
                                         <td>
                                             <div class="font-semibold" x-text="position.symbol"></div>
-                                            <div class="text-xs text-base-content/60" x-text="position.trades.length + ' trades'"></div>
+                                            <div class="flex items-center gap-1 mt-1">
+                                                <span class="text-xs text-base-content/60" x-text="position.trades.length + ' trades'"></span>
+                                                <div x-show="position.trades.some(t => t.isManual)" class="badge badge-xs badge-info">Manual</div>
+                                            </div>
                                         </td>
                                         <td>
                                             <span x-text="position.totalQuantity.toFixed(8)"></span>
@@ -315,13 +326,23 @@
                                         <td :class="(position.realizedPnL || 0) >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (position.realizedPnL || 0).toFixed(2)"></td>
                                         <td :class="(position.unrealizedPnL || 0) >= 0 ? 'text-success' : 'text-error'" x-text="'$' + (position.unrealizedPnL || 0).toFixed(2)"></td>
                                         <td class="text-error">
-                                            <span x-text="'$' + (position.totalCommission || 0).toFixed(8)"></span>
+                                            <span x-text="'$' + (position.totalCommission || 0).toFixed(4)"></span>
                                         </td>
                                         <td :class="(position.totalPnL || 0) >= 0 ? 'text-success' : 'text-error'">
                                             <div class="font-semibold" x-text="'$' + (position.totalPnL || 0).toFixed(2)"></div>
                                         </td>
                                         <td :class="(position.totalPnLPercent || 0) >= 0 ? 'text-success' : 'text-error'">
                                             <div class="font-semibold" x-text="(position.totalPnLPercent || 0).toFixed(2) + '%'"></div>
+                                        </td>
+                                        <td>
+                                            <div class="flex gap-1">
+                                                <button class="btn btn-xs btn-ghost" @click="editPosition(position)" title="Edit Position">
+                                                    ✏️
+                                                </button>
+                                                <button class="btn btn-xs btn-ghost text-error" @click="deletePosition(position)" title="Delete Position">
+                                                    🗑️
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 </template>
@@ -370,7 +391,10 @@
                                             <div class="font-semibold" x-text="(trade.pnlPercent || 0).toFixed(2) + '%'"></div>
                                         </td>
                                         <td class="text-error">
-                                            <span x-show="trade.commission && parseFloat(trade.commission) > 0" x-text="parseFloat(trade.commission).toFixed(8) + ' ' + (trade.commissionAsset || '')"></span>
+                                            <span x-show="trade.commission && parseFloat(trade.commission) > 0">
+                                                <span x-text="parseFloat(trade.commission).toFixed(6)"></span>
+                                                <span class="text-xs text-base-content/60" x-text="trade.commissionAsset"></span>
+                                            </span>
                                             <span x-show="!trade.commission || parseFloat(trade.commission) === 0">--</span>
                                         </td>
                                     </tr>
@@ -451,7 +475,10 @@
                                         <td x-text="new Date(trade.timestamp).toLocaleDateString() + ' ' + new Date(trade.timestamp).toLocaleTimeString()"></td>
                                         <td x-text="trade.symbol"></td>
                                         <td>
-                                            <div class="badge" :class="trade.side === 'BUY' ? 'badge-success' : 'badge-error'" x-text="trade.side"></div>
+                                            <div class="flex flex-col gap-1">
+                                                <div class="badge badge-sm" :class="trade.side === 'BUY' ? 'badge-success' : 'badge-error'" x-text="trade.side"></div>
+                                                <div x-show="trade.isManual" class="badge badge-xs badge-info">Manual</div>
+                                            </div>
                                         </td>
                                         <td x-text="parseFloat(trade.quantity || 0).toFixed(8)"></td>
                                         <td x-text="trade.price ? '$' + parseFloat(trade.price).toFixed(4) : '--'"></td>
@@ -461,8 +488,10 @@
                                         </td>
                                         <td>
                                             <span x-show="trade.commission && parseFloat(trade.commission) > 0">
-                                                <span x-text="parseFloat(trade.commission).toFixed(8)"></span>
-                                                <span class="text-xs text-base-content/60" x-text="trade.commissionAsset"></span>
+                                                <div class="flex flex-col">
+                                                    <span x-text="parseFloat(trade.commission).toFixed(6)"></span>
+                                                    <span class="text-xs text-base-content/60" x-text="trade.commissionAsset"></span>
+                                                </div>
                                             </span>
                                             <span x-show="!trade.commission || parseFloat(trade.commission) === 0" class="text-base-content/60">--</span>
                                         </td>
@@ -527,6 +556,77 @@
                 <div class="modal-action">
                     <button class="btn btn-primary" @click="saveSettings()">Save</button>
                     <button class="btn" @click="closeSettingsModal()">Cancel</button>
+                </div>
+            </div>
+        </dialog>
+
+        <!-- Add/Edit Position Modal -->
+        <dialog x-ref="positionModal" class="modal">
+            <div class="modal-box w-11/12 max-w-2xl">
+                <h3 class="font-bold text-lg mb-4" x-text="positionModalData.isEdit ? 'Edit Position' : 'Add Position'"></h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Symbol -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Symbol</span>
+                        </label>
+                        <input type="text" placeholder="BTCUSDT" class="input input-bordered" 
+                               x-model="positionModalData.symbol" :disabled="positionModalData.isEdit">
+                    </div>
+                    
+                    <!-- Quantity -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Quantity</span>
+                        </label>
+                        <input type="number" step="any" placeholder="0.001" class="input input-bordered" 
+                               x-model="positionModalData.quantity">
+                    </div>
+                    
+                    <!-- Average Price -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Average Price</span>
+                        </label>
+                        <input type="number" step="any" placeholder="50000" class="input input-bordered" 
+                               x-model="positionModalData.price">
+                    </div>
+                    
+                    <!-- Date -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Purchase Date</span>
+                        </label>
+                        <input type="date" class="input input-bordered" 
+                               x-model="positionModalData.date">
+                    </div>
+                </div>
+                
+                <!-- Notes -->
+                <div class="form-control mt-4">
+                    <label class="label">
+                        <span class="label-text">Notes (Optional)</span>
+                    </label>
+                    <textarea class="textarea textarea-bordered" placeholder="e.g., Bought from external exchange" 
+                              x-model="positionModalData.notes"></textarea>
+                </div>
+                
+                <!-- Preview -->
+                <div class="mt-4 p-4 bg-base-200 rounded-lg" x-show="positionModalData.quantity && positionModalData.price">
+                    <h4 class="font-semibold mb-2">Preview:</h4>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div>Total Cost: <span class="font-mono" x-text="'$' + (parseFloat(positionModalData.quantity || 0) * parseFloat(positionModalData.price || 0)).toFixed(2)"></span></div>
+                        <div>Type: <span class="badge badge-info">Manual Entry</span></div>
+                    </div>
+                </div>
+                
+                <div class="modal-action">
+                    <button class="btn btn-primary" @click="savePosition()" 
+                            :disabled="!positionModalData.symbol || !positionModalData.quantity || !positionModalData.price">
+                        <span x-text="positionModalData.isEdit ? 'Update Position' : 'Add Position'"></span>
+                    </button>
+                    <button class="btn" @click="closePositionModal()">Cancel</button>
                 </div>
             </div>
         </dialog>

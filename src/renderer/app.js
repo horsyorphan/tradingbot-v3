@@ -49,6 +49,15 @@ function cryptoApp() {
       message: '',
       action: null
     },
+    positionModalData: {
+      isEdit: false,
+      symbol: '',
+      quantity: '',
+      price: '',
+      date: new Date().toISOString().split('T')[0],
+      notes: '',
+      id: null
+    },
     
     // Price update intervals
     priceUpdateInterval: null,
@@ -59,6 +68,8 @@ function cryptoApp() {
       const value = parseFloat(this.orderQuantity) * parseFloat(this.currentPrice);
       return '$' + value.toFixed(2);
     },
+
+
     
     get canPlaceOrder() {
       return this.isConnected && this.selectedSymbol && this.orderQuantity && parseFloat(this.orderQuantity) > 0;
@@ -153,6 +164,10 @@ function cryptoApp() {
             console.log('📈 Loading trades...');
             await this.loadTrades();
             console.log('✅ Trades loaded');
+            
+            console.log('📋 Loading manual positions...');
+            await this.loadManualPositions();
+            console.log('✅ Manual positions loaded');
             
             console.log('📊 Loading trade stats...');
             await this.loadTradeStats();
@@ -1079,6 +1094,190 @@ function cryptoApp() {
         this.confirmData.action(false);
       }
       this.$refs.confirmModal.close();
+    },
+
+    // Position Management
+    openAddPositionModal() {
+      this.positionModalData = {
+        isEdit: false,
+        symbol: '',
+        quantity: '',
+        price: '',
+        date: new Date().toISOString().split('T')[0],
+        notes: '',
+        id: null
+      };
+      this.$refs.positionModal.showModal();
+    },
+
+    editPosition(position) {
+      this.positionModalData = {
+        isEdit: true,
+        symbol: position.symbol,
+        quantity: position.totalQuantity.toString(),
+        price: position.averagePrice.toString(),
+        date: new Date().toISOString().split('T')[0], // Use today's date as default
+        notes: position.notes || '',
+        id: position.symbol // Use symbol as ID for now
+      };
+      this.$refs.positionModal.showModal();
+    },
+
+    closePositionModal() {
+      this.$refs.positionModal.close();
+    },
+
+    async savePosition() {
+      try {
+        const positionData = {
+          symbol: this.positionModalData.symbol.toUpperCase(),
+          quantity: parseFloat(this.positionModalData.quantity),
+          price: parseFloat(this.positionModalData.price),
+          date: this.positionModalData.date,
+          notes: this.positionModalData.notes,
+          timestamp: new Date(this.positionModalData.date).toISOString(),
+          isManual: true
+        };
+
+        // Validate data
+        if (!positionData.symbol || positionData.quantity <= 0 || positionData.price <= 0) {
+          this.showMessage('❌ Please fill in all required fields with valid values', 'error');
+          return;
+        }
+
+        if (this.positionModalData.isEdit) {
+          // Update existing position
+          await this.updateManualPosition(positionData);
+          this.showMessage('✅ Position updated successfully', 'success');
+        } else {
+          // Add new position
+          await this.addManualPosition(positionData);
+          this.showMessage('✅ Position added successfully', 'success');
+        }
+
+        this.closePositionModal();
+        
+        // Refresh portfolio to include manual positions
+        await this.calculatePnL();
+        
+      } catch (error) {
+        console.error('Error saving position:', error);
+        this.showMessage('❌ Failed to save position: ' + error.message, 'error');
+      }
+    },
+
+    async addManualPosition(positionData) {
+      // Save to local storage for now (can be enhanced to save to database later)
+      const manualPositions = JSON.parse(localStorage.getItem('manualPositions') || '[]');
+      
+      // Create a manual trade entry that integrates with FIFO system
+      const manualTrade = {
+        id: 'manual_' + Date.now(),
+        symbol: positionData.symbol,
+        side: 'BUY',
+        quantity: positionData.quantity.toString(),
+        price: positionData.price.toString(),
+        effectivePrice: positionData.price.toString(),
+        timestamp: positionData.timestamp,
+        success: true,
+        commission: '0',
+        commissionAsset: '',
+        notes: positionData.notes,
+        isManual: true
+      };
+
+      // Add to trades array for FIFO processing
+      this.trades.push(manualTrade);
+      
+      // Also store in manual positions for reference
+      manualPositions.push(positionData);
+      localStorage.setItem('manualPositions', JSON.stringify(manualPositions));
+      
+      console.log('✅ Manual position added:', positionData);
+    },
+
+    async updateManualPosition(positionData) {
+      // Find and update the manual position
+      const manualPositions = JSON.parse(localStorage.getItem('manualPositions') || '[]');
+      const index = manualPositions.findIndex(p => p.symbol === positionData.symbol);
+      
+      if (index !== -1) {
+        manualPositions[index] = positionData;
+        localStorage.setItem('manualPositions', JSON.stringify(manualPositions));
+        
+        // Also update in trades array if it exists
+        const tradeIndex = this.trades.findIndex(t => t.symbol === positionData.symbol && t.isManual);
+        if (tradeIndex !== -1) {
+          this.trades[tradeIndex].quantity = positionData.quantity.toString();
+          this.trades[tradeIndex].price = positionData.price.toString();
+          this.trades[tradeIndex].effectivePrice = positionData.price.toString();
+          this.trades[tradeIndex].notes = positionData.notes;
+        }
+        
+        console.log('✅ Manual position updated:', positionData);
+      }
+    },
+
+    async deletePosition(position) {
+      const confirmed = await this.showConfirmation(
+        'Delete Position',
+        `Are you sure you want to delete the ${position.symbol} position? This action cannot be undone.`
+      );
+      
+      if (confirmed) {
+        try {
+          // Remove from manual positions
+          const manualPositions = JSON.parse(localStorage.getItem('manualPositions') || '[]');
+          const filteredPositions = manualPositions.filter(p => p.symbol !== position.symbol);
+          localStorage.setItem('manualPositions', JSON.stringify(filteredPositions));
+          
+          // Remove manual trades for this symbol
+          this.trades = this.trades.filter(t => !(t.symbol === position.symbol && t.isManual));
+          
+          this.showMessage('✅ Position deleted successfully', 'success');
+          
+          // Refresh portfolio
+          await this.calculatePnL();
+          
+        } catch (error) {
+          console.error('Error deleting position:', error);
+          this.showMessage('❌ Failed to delete position: ' + error.message, 'error');
+        }
+      }
+    },
+
+    async loadManualPositions() {
+      try {
+        const manualPositions = JSON.parse(localStorage.getItem('manualPositions') || '[]');
+        
+        // Convert manual positions to trade format for FIFO processing
+        manualPositions.forEach(position => {
+          const existingTrade = this.trades.find(t => t.symbol === position.symbol && t.isManual);
+          
+          if (!existingTrade) {
+            const manualTrade = {
+              id: 'manual_' + position.symbol,
+              symbol: position.symbol,
+              side: 'BUY',
+              quantity: position.quantity.toString(),
+              price: position.price.toString(),
+              effectivePrice: position.price.toString(),
+              timestamp: position.timestamp,
+              success: true,
+              commission: '0',
+              commissionAsset: '',
+              notes: position.notes || '',
+              isManual: true
+            };
+            
+            this.trades.push(manualTrade);
+          }
+        });
+        
+        console.log('📋 Loaded manual positions:', manualPositions.length);
+      } catch (error) {
+        console.error('Error loading manual positions:', error);
+      }
     },
 
     // Cleanup

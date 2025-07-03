@@ -30,6 +30,8 @@ function cryptoApp() {
     totalPnLPercent: 0,
     totalRealizedPnL: 0,
     totalUnrealizedPnL: 0,
+    totalCommission: 0,
+    showIndividualTrades: false,
     
     // Trade history
     trades: [],
@@ -60,6 +62,45 @@ function cryptoApp() {
     
     get canPlaceOrder() {
       return this.isConnected && this.selectedSymbol && this.orderQuantity && parseFloat(this.orderQuantity) > 0;
+    },
+
+    get individualTrades() {
+      if (!this.trades || this.trades.length === 0) return [];
+      
+      // Get all successful BUY trades and calculate individual P&L
+      const buyTrades = this.trades
+        .filter(trade => trade.success && trade.side === 'BUY')
+        .map(trade => {
+          const symbol = trade.symbol;
+          const quantity = parseFloat(trade.quantity) || 0;
+          const buyPrice = parseFloat(trade.effectivePrice || trade.price) || 0;
+          const commission = parseFloat(trade.commission) || 0;
+          
+          // Get current price from portfolio data or symbol prices
+          let currentPrice = 0;
+          const portfolioPosition = this.portfolio.find(p => p.symbol === symbol);
+          if (portfolioPosition) {
+            currentPrice = portfolioPosition.currentPrice || 0;
+          }
+          
+          // Calculate individual trade P&L
+          const marketValue = quantity * currentPrice;
+          const costBasis = quantity * buyPrice;
+          const unrealizedPnL = marketValue - costBasis;
+          const pnlPercent = costBasis > 0 ? (unrealizedPnL / costBasis) * 100 : 0;
+          
+          return {
+            ...trade,
+            currentPrice: currentPrice,
+            marketValue: marketValue,
+            unrealizedPnL: unrealizedPnL,
+            pnlPercent: pnlPercent,
+            costBasis: costBasis
+          };
+        })
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // Most recent first
+      
+      return buyTrades;
     },
 
     // Initialization
@@ -701,10 +742,19 @@ function cryptoApp() {
         
         // Group trades by symbol to calculate positions
         const positions = {};
-        const successfulTrades = this.trades.filter(t => t.success);
+        const successfulTrades = this.trades
+          .filter(t => t.success)
+          .sort((a, b) => {
+            // First sort by symbol
+            if (a.symbol !== b.symbol) {
+              return a.symbol.localeCompare(b.symbol);
+            }
+            // Then sort by timestamp (oldest first)
+            return new Date(a.timestamp) - new Date(b.timestamp);
+          });
         let totalRealizedPnL = 0;
         
-        console.log(`📈 Processing ${successfulTrades.length} successful trades`);
+        console.log(`📈 Processing ${successfulTrades.length} successful trades (sorted by symbol and timestamp)`);
         
         // Debug: Log first few trades to see data structure
         if (successfulTrades.length > 0) {
@@ -756,31 +806,55 @@ function cryptoApp() {
             console.log(`After BUY: quantity=${position.totalQuantity}, cost=$${position.totalCost}, avg=$${position.averagePrice.toFixed(4)} (includes fees)`);
             
           } else if (trade.side === 'SELL') {
-            console.log(`Before SELL: quantity=${position.totalQuantity}, avg=$${position.averagePrice}`);
+            console.log(`\n🔴 SELL TRADE ANALYSIS:`);
+            console.log(`Before SELL: quantity=${position.totalQuantity}, totalCost=$${position.totalCost}, avg=$${position.averagePrice.toFixed(4)}`);
+            console.log(`Selling: ${quantity} at effective price $${priceForCalculation}`);
+            
+            // Validate we have enough quantity to sell
+            if (quantity > position.totalQuantity) {
+              console.error(`❌ ERROR: Trying to sell ${quantity} but only have ${position.totalQuantity}`);
+              position.sellTrades.push(trade);
+              return; // Skip this invalid sell trade
+            }
             
             // Calculate realized P&L for this sale using current average price
             if (position.totalQuantity > 0 && position.averagePrice > 0) {
-              const realizedPnLFromSale = (priceForCalculation - position.averagePrice) * quantity;
+              const costBasisOfSoldQuantity = quantity * position.averagePrice;
+              const proceedsFromSale = quantity * priceForCalculation;
+              const realizedPnLFromSale = proceedsFromSale - costBasisOfSoldQuantity;
+              
+              console.log(`Cost basis of sold quantity: ${quantity} × $${position.averagePrice.toFixed(4)} = $${costBasisOfSoldQuantity.toFixed(2)}`);
+              console.log(`Proceeds from sale: ${quantity} × $${priceForCalculation.toFixed(4)} = $${proceedsFromSale.toFixed(2)}`);
+              console.log(`Realized P&L: $${proceedsFromSale.toFixed(2)} - $${costBasisOfSoldQuantity.toFixed(2)} = $${realizedPnLFromSale.toFixed(2)}`);
+              
               position.realizedPnL += realizedPnLFromSale;
               totalRealizedPnL += realizedPnLFromSale;
-              
-              console.log(`Realized P&L from sale: $${realizedPnLFromSale.toFixed(2)} (sold at effective $${priceForCalculation} vs avg $${position.averagePrice.toFixed(4)})`);
             }
             
             // Update position (sell reduces quantity and proportional cost)
-            position.totalQuantity -= quantity;
-            position.totalCost -= quantity * position.averagePrice; // Use current average price, not the new price
+            const newQuantity = position.totalQuantity - quantity;
+            const newTotalCost = position.totalCost - (quantity * position.averagePrice);
+            
+            console.log(`Updating position:`);
+            console.log(`  New quantity: ${position.totalQuantity} - ${quantity} = ${newQuantity}`);
+            console.log(`  New total cost: $${position.totalCost.toFixed(2)} - (${quantity} × $${position.averagePrice.toFixed(4)}) = $${newTotalCost.toFixed(2)}`);
+            
+            position.totalQuantity = Math.max(0, newQuantity); // Prevent negative quantities
+            position.totalCost = Math.max(0, newTotalCost); // Prevent negative costs
             position.sellTrades.push(trade);
             
             // Average price stays the same for remaining position (only quantity and total cost change)
             if (position.totalQuantity > 0) {
               position.averagePrice = position.totalCost / position.totalQuantity;
+              console.log(`  New average price: $${position.totalCost.toFixed(2)} ÷ ${position.totalQuantity} = $${position.averagePrice.toFixed(4)}`);
             } else {
               position.averagePrice = 0;
               position.totalCost = 0; // Clean up any rounding errors
+              console.log(`  Position fully closed - setting avg price and cost to 0`);
             }
             
-            console.log(`After SELL: quantity=${position.totalQuantity}, cost=$${position.totalCost}, avg=$${position.averagePrice.toFixed(4)}`);
+            console.log(`After SELL: quantity=${position.totalQuantity}, cost=$${position.totalCost.toFixed(2)}, avg=$${position.averagePrice.toFixed(4)}`);
+            console.log(`Total realized P&L for ${symbol}: $${position.realizedPnL.toFixed(2)}\n`);
           }
         });
         
@@ -815,19 +889,39 @@ function cryptoApp() {
               let unrealizedPnLPercent = 0;
               const currentValue = position.totalQuantity * currentPrice;
               
+              console.log(`\n💰 FINAL P&L CALCULATION for ${symbol}:`);
+              console.log(`Current price: $${currentPrice}`);
+              console.log(`Remaining quantity: ${position.totalQuantity}`);
+              console.log(`Remaining cost basis: $${position.totalCost.toFixed(2)}`);
+              console.log(`Current value: ${position.totalQuantity} × $${currentPrice} = $${currentValue.toFixed(2)}`);
+              
               if (position.totalQuantity > 0) {
                 unrealizedPnL = currentValue - position.totalCost;
                 unrealizedPnLPercent = position.totalCost > 0 ? (unrealizedPnL / position.totalCost) * 100 : 0;
                 
+                console.log(`Unrealized P&L: $${currentValue.toFixed(2)} - $${position.totalCost.toFixed(2)} = $${unrealizedPnL.toFixed(2)} (${unrealizedPnLPercent.toFixed(2)}%)`);
+                
                 totalValue += currentValue;
                 totalCost += position.totalCost;
                 totalUnrealizedPnL += unrealizedPnL;
+              } else {
+                console.log(`No remaining holdings - unrealized P&L = $0`);
               }
               
               // Calculate total P&L (realized + unrealized - total commission)
-              const totalPnLForPosition = position.realizedPnL + unrealizedPnL - position.totalCommission;
+              const totalPnLBeforeFees = position.realizedPnL + unrealizedPnL;
+              const totalPnLForPosition = totalPnLBeforeFees - position.totalCommission;
               const totalInvested = position.buyTrades.reduce((sum, t) => sum + (parseFloat(t.quantity) * parseFloat(t.price)), 0);
               const totalPnLPercent = totalInvested > 0 ? (totalPnLForPosition / totalInvested) * 100 : 0;
+              
+              console.log(`Summary for ${symbol}:`);
+              console.log(`  Realized P&L: $${position.realizedPnL.toFixed(2)}`);
+              console.log(`  Unrealized P&L: $${unrealizedPnL.toFixed(2)}`);
+              console.log(`  Total before fees: $${totalPnLBeforeFees.toFixed(2)}`);
+              console.log(`  Total commission: $${position.totalCommission.toFixed(8)}`);
+              console.log(`  Final total P&L: $${totalPnLForPosition.toFixed(2)}`);
+              console.log(`  Total invested: $${totalInvested.toFixed(2)}`);
+              console.log(`  P&L percentage: ${totalPnLPercent.toFixed(2)}%\n`);
               
               position.currentPrice = currentPrice;
               position.currentValue = currentValue;

@@ -253,8 +253,28 @@
             <!-- Portfolio Table -->
             <div class="card bg-base-200 shadow-xl">
                 <div class="card-body">
-                    <h3 class="card-title mb-4">Portfolio Positions</h3>
-                    <div class="overflow-x-auto">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 class="card-title">Portfolio Positions</h3>
+                            <div class="text-sm text-base-content/60 mt-1">
+                                <span x-show="!showIndividualTrades">Combined positions with average prices and total P&L</span>
+                                <span x-show="showIndividualTrades">Individual BUY trades with separate P&L for each purchase</span>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 items-center">
+                            <button class="btn btn-sm btn-outline" @click="calculatePnL()" title="Recalculate P&L with detailed debugging">
+                                🐛 Debug P&L
+                            </button>
+                            <div class="form-control">
+                                <label class="label cursor-pointer">
+                                    <span class="label-text mr-2" x-text="showIndividualTrades ? 'Individual Trades' : 'Summary View'"></span>
+                                    <input type="checkbox" class="toggle toggle-primary" x-model="showIndividualTrades">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Summary View -->
+                    <div class="overflow-x-auto" x-show="!showIndividualTrades">
                         <table class="table table-sm">
                             <thead>
                                 <tr>
@@ -300,14 +320,66 @@
                             </tbody>
                         </table>
                     </div>
-                    <div x-show="portfolio.length === 0 && !isLoadingData && !isInitializing" class="text-center py-8 text-base-content/60">
-                        No trading positions found. Start trading to see your portfolio here.
+
+                    <!-- Individual Trades View -->
+                    <div class="overflow-x-auto" x-show="showIndividualTrades">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Symbol</th>
+                                    <th>Side</th>
+                                    <th>Quantity</th>
+                                    <th>Buy Price</th>
+                                    <th>Current Price</th>
+                                    <th>Market Value</th>
+                                    <th>Unrealized P&L</th>
+                                    <th>P&L %</th>
+                                    <th>Commission</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="trade in individualTrades" :key="trade.id || (trade.timestamp + trade.symbol + trade.quantity)">
+                                    <tr>
+                                        <td>
+                                            <div class="text-sm" x-text="new Date(trade.timestamp).toLocaleDateString()"></div>
+                                            <div class="text-xs text-base-content/60" x-text="new Date(trade.timestamp).toLocaleTimeString()"></div>
+                                        </td>
+                                        <td>
+                                            <div class="font-semibold" x-text="trade.symbol"></div>
+                                        </td>
+                                        <td>
+                                            <div class="badge badge-sm" :class="trade.side === 'BUY' ? 'badge-success' : 'badge-error'" x-text="trade.side"></div>
+                                        </td>
+                                        <td x-text="parseFloat(trade.quantity).toFixed(8)"></td>
+                                        <td x-text="'$' + parseFloat(trade.effectivePrice || trade.price).toFixed(4)"></td>
+                                        <td x-text="'$' + (trade.currentPrice || 0).toFixed(4)"></td>
+                                        <td x-text="'$' + (trade.marketValue || 0).toFixed(2)"></td>
+                                        <td :class="(trade.unrealizedPnL || 0) >= 0 ? 'text-success' : 'text-error'">
+                                            <div class="font-semibold" x-text="'$' + (trade.unrealizedPnL || 0).toFixed(2)"></div>
+                                        </td>
+                                        <td :class="(trade.pnlPercent || 0) >= 0 ? 'text-success' : 'text-error'">
+                                            <div class="font-semibold" x-text="(trade.pnlPercent || 0).toFixed(2) + '%'"></div>
+                                        </td>
+                                        <td class="text-error">
+                                            <span x-show="trade.commission && parseFloat(trade.commission) > 0" x-text="parseFloat(trade.commission).toFixed(8) + ' ' + (trade.commissionAsset || '')"></span>
+                                            <span x-show="!trade.commission || parseFloat(trade.commission) === 0">--</span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
                     </div>
-                    <div x-show="portfolio.length === 0 && (isLoadingData || isInitializing)" class="text-center py-8">
+                    <div x-show="(!showIndividualTrades && portfolio.length === 0) || (showIndividualTrades && individualTrades.length === 0) && !isLoadingData && !isInitializing" class="text-center py-8 text-base-content/60">
+                        <span x-show="!showIndividualTrades">No trading positions found. Start trading to see your portfolio here.</span>
+                        <span x-show="showIndividualTrades">No individual trades found. Only BUY trades are shown in this view.</span>
+                    </div>
+                    <div x-show="((!showIndividualTrades && portfolio.length === 0) || (showIndividualTrades && individualTrades.length === 0)) && (isLoadingData || isInitializing)" class="text-center py-8">
                         <div class="loading loading-spinner loading-lg"></div>
                         <div class="text-base-content/60 mt-4">
                             <span x-show="isInitializing">Initializing app...</span>
-                            <span x-show="isLoadingData">Loading portfolio data...</span>
+                            <span x-show="isLoadingData && !showIndividualTrades">Loading portfolio data...</span>
+                            <span x-show="isLoadingData && showIndividualTrades">Loading individual trades...</span>
                         </div>
                     </div>
                 </div>

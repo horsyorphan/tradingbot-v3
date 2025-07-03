@@ -56,8 +56,15 @@ function cryptoApp() {
       price: '',
       date: new Date().toISOString().split('T')[0],
       notes: '',
+      commission: '',
+      commissionAsset: 'USDT',
       id: null
     },
+    
+    // Symbol search for manual positions
+    positionSymbolSearch: '',
+    filteredSymbolsForPosition: [],
+    showSymbolDropdownForPosition: false,
     
     // Price update intervals
     priceUpdateInterval: null,
@@ -114,6 +121,31 @@ function cryptoApp() {
       return individualLots.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     },
 
+    get availableTokens() {
+      // Extract unique tokens from symbols
+      const tokens = new Set(['USDT', 'BNB', 'BUSD']); // Start with common commission assets
+      
+      this.symbols.forEach(symbol => {
+        // Extract base and quote assets from symbol
+        // Most symbols end with USDT, BUSD, BNB, BTC, ETH, etc.
+        const commonQuotes = ['USDT', 'BUSD', 'BNB', 'BTC', 'ETH', 'FDUSD', 'USDC', 'DAI', 'TUSD'];
+        
+        for (const quote of commonQuotes) {
+          if (symbol.endsWith(quote)) {
+            const base = symbol.slice(0, -quote.length);
+            if (base.length > 0) {
+              tokens.add(base);  // Add base token
+              tokens.add(quote); // Add quote token
+            }
+            break;
+          }
+        }
+      });
+      
+      // Convert to sorted array
+      return Array.from(tokens).sort();
+    },
+
     // Initialization
     async init() {
       console.log('🚀 Initializing Doggy&Tutu Trade...');
@@ -150,9 +182,19 @@ function cryptoApp() {
         // Setup WebSocket price update listener
         this.setupPriceUpdateListener();
         
+        // Step 4: Load manual positions (always, regardless of connection)
+        console.log('📋 Step 4: Loading manual positions...');
+        try {
+          await this.loadManualPositions();
+          const manualCount = this.trades.filter(t => t.isManual).length;
+          console.log(`✅ Manual positions loaded: ${manualCount} manual trades integrated`);
+        } catch (manualError) {
+          console.error('💥 Error loading manual positions:', manualError);
+        }
+
         // Auto-load ALL data if connected
         if (this.isConnected) {
-          console.log('📊 Step 4: Auto-loading all data on startup...');
+          console.log('📊 Step 5: Auto-loading all data on startup...');
           this.showMessage('🔄 Loading portfolio data automatically...', 'info');
           
           try {
@@ -164,10 +206,6 @@ function cryptoApp() {
             console.log('📈 Loading trades...');
             await this.loadTrades();
             console.log('✅ Trades loaded');
-            
-            console.log('📋 Loading manual positions...');
-            await this.loadManualPositions();
-            console.log('✅ Manual positions loaded');
             
             console.log('📊 Loading trade stats...');
             await this.loadTradeStats();
@@ -184,7 +222,19 @@ function cryptoApp() {
             this.showMessage('⚠️ Error loading some data: ' + dataError.message, 'error');
           }
         } else {
-          console.log('⚠️ Not connected - skipping data loading');
+          console.log('⚠️ Not connected - skipping online data loading');
+          
+          // Even if not connected, calculate P&L for manual positions
+          if (this.trades.length > 0) {
+            console.log('📊 Calculating P&L for manual positions...');
+            try {
+              await this.calculatePnL();
+              console.log('✅ Manual position P&L calculated');
+            } catch (pnlError) {
+              console.error('💥 Error calculating manual P&L:', pnlError);
+            }
+          }
+          
           if (!this.settings.apiKey || !this.settings.apiSecret) {
             this.showMessage('🔑 Please set up your Binance API credentials in Settings to get started', 'info');
           } else {
@@ -352,6 +402,63 @@ function cryptoApp() {
       this.currentPrice = null;
       this.priceChange24h = null;
       this.volume24h = null;
+    },
+
+    // Position modal symbol filtering
+    filterSymbolsForPosition() {
+      const search = this.positionSymbolSearch.toLowerCase();
+      
+      if (!search) {
+        this.filteredSymbolsForPosition = this.symbols.slice(0, 50); // Show first 50 symbols
+        return;
+      }
+      
+      this.filteredSymbolsForPosition = this.symbols.filter(symbol => 
+        symbol.toLowerCase().includes(search)
+      ).sort((a, b) => {
+        // Prioritize symbols that start with the search term
+        const aStarts = a.toLowerCase().startsWith(search);
+        const bStarts = b.toLowerCase().startsWith(search);
+        
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        
+        return a.localeCompare(b);
+      }).slice(0, 50); // Limit to 50 results
+    },
+
+    selectSymbolForPosition(symbol) {
+      console.log('🎯 Selected symbol for position:', symbol);
+      this.positionModalData.symbol = symbol;
+      this.positionSymbolSearch = symbol;
+      this.showSymbolDropdownForPosition = false;
+      this.filteredSymbolsForPosition = [];
+      
+      // Auto-set commission asset to base asset by default
+      const baseAsset = this.extractBaseAsset(symbol);
+      if (baseAsset) {
+        this.positionModalData.commissionAsset = baseAsset;
+        console.log('💰 Auto-set commission asset to:', baseAsset);
+      }
+    },
+
+    extractBaseAsset(symbol) {
+      // Extract base asset from symbol (e.g., BTCUSDT -> BTC)
+      const commonQuotes = ['USDT', 'BUSD', 'BNB', 'BTC', 'ETH', 'FDUSD', 'USDC', 'DAI', 'TUSD'];
+      
+      for (const quote of commonQuotes) {
+        if (symbol.endsWith(quote)) {
+          return symbol.slice(0, -quote.length);
+        }
+      }
+      return null;
+    },
+
+    clearPositionSymbolSearch() {
+      this.positionModalData.symbol = '';
+      this.positionSymbolSearch = '';
+      this.filteredSymbolsForPosition = [];
+      this.showSymbolDropdownForPosition = false;
     },
 
     // Price management
@@ -680,11 +787,20 @@ function cryptoApp() {
     async loadTrades() {
       try {
         console.log('📈 Loading trade history...');
+        
+        // Preserve manual trades that are already loaded
+        const existingManualTrades = this.trades.filter(t => t.isManual) || [];
+        console.log(`💾 Preserving ${existingManualTrades.length} existing manual trades`);
+        
         const result = await ipcRenderer.invoke('get-trades');
         
         if (result.success) {
-          this.trades = result.data || [];
-          console.log(`📊 Loaded ${this.trades.length} trades from database`);
+          const databaseTrades = result.data || [];
+          
+          // Combine database trades with manual trades
+          this.trades = [...databaseTrades, ...existingManualTrades];
+          
+          console.log(`📊 Loaded ${databaseTrades.length} trades from database + ${existingManualTrades.length} manual trades = ${this.trades.length} total`);
         } else {
           console.error('❌ Failed to load trades:', result.error);
           this.showMessage('Failed to load trades: ' + result.error, 'error');
@@ -1098,6 +1214,7 @@ function cryptoApp() {
 
     // Position Management
     openAddPositionModal() {
+      console.log('🔷 Opening add position modal');
       this.positionModalData = {
         isEdit: false,
         symbol: '',
@@ -1105,36 +1222,89 @@ function cryptoApp() {
         price: '',
         date: new Date().toISOString().split('T')[0],
         notes: '',
+        commission: '',
+        commissionAsset: 'USDT',
         id: null
       };
+      this.positionSymbolSearch = '';
+      this.filteredSymbolsForPosition = this.symbols.slice(0, 50);
+      this.showSymbolDropdownForPosition = false;
       this.$refs.positionModal.showModal();
     },
 
     editPosition(position) {
-      this.positionModalData = {
-        isEdit: true,
-        symbol: position.symbol,
-        quantity: position.totalQuantity.toString(),
-        price: position.averagePrice.toString(),
-        date: new Date().toISOString().split('T')[0], // Use today's date as default
-        notes: position.notes || '',
-        id: position.symbol // Use symbol as ID for now
-      };
+      // Find the manual position data
+      const manualPositions = JSON.parse(localStorage.getItem('manualPositions') || '[]');
+      const manualPosition = manualPositions.find(p => p.symbol === position.symbol);
+      
+      if (manualPosition) {
+        // Edit existing manual position
+        this.positionModalData = {
+          isEdit: true,
+          symbol: manualPosition.symbol,
+          quantity: manualPosition.quantity.toString(),
+          price: manualPosition.price.toString(),
+          date: manualPosition.date,
+          notes: manualPosition.notes || '',
+          commission: (manualPosition.commission || 0).toString(),
+          commissionAsset: manualPosition.commissionAsset || 'USDT',
+          id: manualPosition.symbol
+        };
+        this.positionSymbolSearch = manualPosition.symbol;
+      } else {
+        // Position from trading, create manual edit with current values
+        this.positionModalData = {
+          isEdit: true,
+          symbol: position.symbol,
+          quantity: position.totalQuantity.toString(),
+          price: position.averagePrice.toString(),
+          date: new Date().toISOString().split('T')[0], // Use today's date as default
+          notes: position.notes || '',
+          commission: '',
+          commissionAsset: 'USDT',
+          id: position.symbol // Use symbol as ID for now
+        };
+        this.positionSymbolSearch = position.symbol;
+      }
+      
+      this.filteredSymbolsForPosition = this.symbols.slice(0, 50);
+      this.showSymbolDropdownForPosition = false;
+      
       this.$refs.positionModal.showModal();
     },
 
     closePositionModal() {
       this.$refs.positionModal.close();
+      // Reset form data
+      this.positionModalData = {
+        isEdit: false,
+        symbol: '',
+        quantity: '',
+        price: '',
+        date: new Date().toISOString().split('T')[0],
+        notes: '',
+        commission: '',
+        commissionAsset: 'USDT',
+        id: null
+      };
+      // Reset symbol search
+      this.positionSymbolSearch = '';
+      this.filteredSymbolsForPosition = [];
+      this.showSymbolDropdownForPosition = false;
     },
 
     async savePosition() {
       try {
+        const commission = parseFloat(this.positionModalData.commission) || 0;
+        
         const positionData = {
           symbol: this.positionModalData.symbol.toUpperCase(),
           quantity: parseFloat(this.positionModalData.quantity),
           price: parseFloat(this.positionModalData.price),
           date: this.positionModalData.date,
           notes: this.positionModalData.notes,
+          commission: commission,
+          commissionAsset: this.positionModalData.commissionAsset || 'USDT',
           timestamp: new Date(this.positionModalData.date).toISOString(),
           isManual: true
         };
@@ -1170,18 +1340,29 @@ function cryptoApp() {
       // Save to local storage for now (can be enhanced to save to database later)
       const manualPositions = JSON.parse(localStorage.getItem('manualPositions') || '[]');
       
+      // Calculate adjusted quantity if commission is paid in the same asset
+      let adjustedQuantity = positionData.quantity;
+      const baseAsset = this.extractBaseAsset(positionData.symbol);
+      const commission = positionData.commission || 0;
+      
+      // If commission is paid in the same asset as the base asset, deduct it from quantity
+      if (baseAsset && positionData.commissionAsset === baseAsset && commission > 0) {
+        adjustedQuantity = positionData.quantity - commission;
+        console.log(`💰 Commission deduction: ${positionData.quantity} ${baseAsset} - ${commission} ${positionData.commissionAsset} = ${adjustedQuantity} ${baseAsset}`);
+      }
+      
       // Create a manual trade entry that integrates with FIFO system
       const manualTrade = {
         id: 'manual_' + Date.now(),
         symbol: positionData.symbol,
         side: 'BUY',
-        quantity: positionData.quantity.toString(),
+        quantity: adjustedQuantity.toString(),
         price: positionData.price.toString(),
         effectivePrice: positionData.price.toString(),
         timestamp: positionData.timestamp,
         success: true,
-        commission: '0',
-        commissionAsset: '',
+        commission: (positionData.commission || 0).toString(),
+        commissionAsset: positionData.commissionAsset || 'USDT',
         notes: positionData.notes,
         isManual: true
       };
@@ -1189,11 +1370,14 @@ function cryptoApp() {
       // Add to trades array for FIFO processing
       this.trades.push(manualTrade);
       
-      // Also store in manual positions for reference
+      // Also store in manual positions for reference (store original quantity for editing)
       manualPositions.push(positionData);
       localStorage.setItem('manualPositions', JSON.stringify(manualPositions));
       
       console.log('✅ Manual position added:', positionData);
+      if (adjustedQuantity !== positionData.quantity) {
+        console.log(`📊 Effective quantity after commission: ${adjustedQuantity}`);
+      }
     },
 
     async updateManualPosition(positionData) {
@@ -1205,16 +1389,32 @@ function cryptoApp() {
         manualPositions[index] = positionData;
         localStorage.setItem('manualPositions', JSON.stringify(manualPositions));
         
+        // Calculate adjusted quantity if commission is paid in the same asset
+        let adjustedQuantity = positionData.quantity;
+        const baseAsset = this.extractBaseAsset(positionData.symbol);
+        const commission = positionData.commission || 0;
+        
+        // If commission is paid in the same asset as the base asset, deduct it from quantity
+        if (baseAsset && positionData.commissionAsset === baseAsset && commission > 0) {
+          adjustedQuantity = positionData.quantity - commission;
+          console.log(`💰 Commission deduction: ${positionData.quantity} ${baseAsset} - ${commission} ${positionData.commissionAsset} = ${adjustedQuantity} ${baseAsset}`);
+        }
+        
         // Also update in trades array if it exists
         const tradeIndex = this.trades.findIndex(t => t.symbol === positionData.symbol && t.isManual);
         if (tradeIndex !== -1) {
-          this.trades[tradeIndex].quantity = positionData.quantity.toString();
+          this.trades[tradeIndex].quantity = adjustedQuantity.toString();
           this.trades[tradeIndex].price = positionData.price.toString();
           this.trades[tradeIndex].effectivePrice = positionData.price.toString();
+          this.trades[tradeIndex].commission = (positionData.commission || 0).toString();
+          this.trades[tradeIndex].commissionAsset = positionData.commissionAsset || 'USDT';
           this.trades[tradeIndex].notes = positionData.notes;
         }
         
         console.log('✅ Manual position updated:', positionData);
+        if (adjustedQuantity !== positionData.quantity) {
+          console.log(`📊 Effective quantity after commission: ${adjustedQuantity}`);
+        }
       }
     },
 
@@ -1249,32 +1449,48 @@ function cryptoApp() {
     async loadManualPositions() {
       try {
         const manualPositions = JSON.parse(localStorage.getItem('manualPositions') || '[]');
+        console.log(`📋 Found ${manualPositions.length} manual positions in localStorage:`, manualPositions);
         
         // Convert manual positions to trade format for FIFO processing
-        manualPositions.forEach(position => {
+        manualPositions.forEach((position, index) => {
           const existingTrade = this.trades.find(t => t.symbol === position.symbol && t.isManual);
           
           if (!existingTrade) {
+            // Calculate adjusted quantity if commission is paid in the same asset
+            let adjustedQuantity = position.quantity;
+            const baseAsset = this.extractBaseAsset(position.symbol);
+            const commission = position.commission || 0;
+            
+            // If commission is paid in the same asset as the base asset, deduct it from quantity
+            if (baseAsset && position.commissionAsset === baseAsset && commission > 0) {
+              adjustedQuantity = position.quantity - commission;
+              console.log(`💰 Loading with commission deduction: ${position.quantity} ${baseAsset} - ${commission} ${position.commissionAsset} = ${adjustedQuantity} ${baseAsset}`);
+            }
+            
             const manualTrade = {
-              id: 'manual_' + position.symbol,
+              id: 'manual_' + position.symbol + '_' + Date.now() + '_' + index,
               symbol: position.symbol,
               side: 'BUY',
-              quantity: position.quantity.toString(),
+              quantity: adjustedQuantity.toString(),
               price: position.price.toString(),
               effectivePrice: position.price.toString(),
               timestamp: position.timestamp,
               success: true,
-              commission: '0',
-              commissionAsset: '',
+              commission: (position.commission || 0).toString(),
+              commissionAsset: position.commissionAsset || 'USDT',
               notes: position.notes || '',
               isManual: true
             };
             
             this.trades.push(manualTrade);
+            console.log(`📝 Added manual trade for ${position.symbol}:`, manualTrade);
+          } else {
+            console.log(`⚠️ Manual trade for ${position.symbol} already exists, skipping`);
           }
         });
         
-        console.log('📋 Loaded manual positions:', manualPositions.length);
+        console.log(`📋 Loaded manual positions: ${manualPositions.length} positions processed`);
+        console.log(`📊 Total trades in array: ${this.trades.length} (${this.trades.filter(t => t.isManual).length} manual)`);
       } catch (error) {
         console.error('Error loading manual positions:', error);
       }

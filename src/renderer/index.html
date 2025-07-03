@@ -571,8 +571,41 @@
                         <label class="label">
                             <span class="label-text">Symbol</span>
                         </label>
-                        <input type="text" placeholder="BTCUSDT" class="input input-bordered" 
-                               x-model="positionModalData.symbol" :disabled="positionModalData.isEdit">
+                        <div class="dropdown dropdown-bottom w-full relative">
+                            <input 
+                                type="text" 
+                                placeholder="Type to search symbols (e.g. BTC, ETH)..." 
+                                class="input input-bordered w-full pr-10" 
+                                x-model="positionSymbolSearch"
+                                :disabled="positionModalData.isEdit"
+                                @input="filterSymbolsForPosition(); positionModalData.symbol = positionSymbolSearch"
+                                @focus="showSymbolDropdownForPosition = true; filterSymbolsForPosition()"
+                                @blur="setTimeout(() => showSymbolDropdownForPosition = false, 200)"
+                                autocomplete="off"
+                            />
+                            <button 
+                                x-show="positionSymbolSearch && !positionModalData.isEdit"
+                                @click="clearPositionSymbolSearch()"
+                                class="absolute right-2 top-1/2 transform -translate-y-1/2 btn btn-ghost btn-xs"
+                                type="button"
+                            >
+                                ✕
+                            </button>
+                            <div x-show="showSymbolDropdownForPosition && filteredSymbolsForPosition.length > 0" 
+                                 class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full max-h-60 overflow-y-auto">
+                                <template x-for="symbol in filteredSymbolsForPosition.slice(0, 20)" :key="symbol">
+                                    <li>
+                                        <a @click="selectSymbolForPosition(symbol)" x-text="symbol" class="text-sm"></a>
+                                    </li>
+                                </template>
+                                <li x-show="filteredSymbolsForPosition.length > 20" class="text-xs text-base-content/60 px-4 py-2">
+                                    <span>Showing first 20 results. Keep typing to narrow down...</span>
+                                </li>
+                                <li x-show="filteredSymbolsForPosition.length === 0 && positionSymbolSearch && positionSymbolSearch.length > 0" class="text-xs text-base-content/60 px-4 py-2">
+                                    <span>No symbols found matching your search</span>
+                                </li>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Quantity -->
@@ -601,6 +634,36 @@
                         <input type="date" class="input input-bordered" 
                                x-model="positionModalData.date">
                     </div>
+                    
+                    <!-- Commission -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Commission (Optional)</span>
+                        </label>
+                        <input type="number" step="any" placeholder="0.01" class="input input-bordered" 
+                               x-model="positionModalData.commission">
+                    </div>
+                    
+                    <!-- Commission Asset -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">Commission Asset</span>
+                        </label>
+                        <select class="select select-bordered" x-model="positionModalData.commissionAsset">
+                            <template x-for="token in availableTokens" :key="token">
+                                <option :value="token" x-text="token"></option>
+                            </template>
+                            <!-- Fallback options when symbols not loaded -->
+                            <template x-if="availableTokens.length === 0">
+                                <option value="USDT">USDT</option>
+                            </template>
+                        </select>
+                        <div class="label">
+                            <span class="label-text-alt text-base-content/60">
+                                <span x-text="availableTokens.length"></span> tokens available
+                            </span>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Notes -->
@@ -618,6 +681,18 @@
                     <div class="grid grid-cols-2 gap-2 text-sm">
                         <div>Total Cost: <span class="font-mono" x-text="'$' + (parseFloat(positionModalData.quantity || 0) * parseFloat(positionModalData.price || 0)).toFixed(2)"></span></div>
                         <div>Type: <span class="badge badge-info">Manual Entry</span></div>
+                        <div x-show="positionModalData.commission && parseFloat(positionModalData.commission) > 0">
+                            Commission: <span class="font-mono" x-text="parseFloat(positionModalData.commission || 0).toFixed(6) + ' ' + positionModalData.commissionAsset"></span>
+                        </div>
+                        <div x-show="positionModalData.commission && parseFloat(positionModalData.commission) > 0 && extractBaseAsset(positionModalData.symbol) === positionModalData.commissionAsset">
+                            <span class="text-warning">⚠️ Commission deducted from quantity</span>
+                        </div>
+                        <div x-show="positionModalData.commission && parseFloat(positionModalData.commission) > 0 && extractBaseAsset(positionModalData.symbol) === positionModalData.commissionAsset">
+                            Effective Quantity: <span class="font-mono" x-text="(parseFloat(positionModalData.quantity || 0) - parseFloat(positionModalData.commission || 0)).toFixed(6)"></span>
+                        </div>
+                        <div x-show="positionModalData.commission && parseFloat(positionModalData.commission) > 0 && extractBaseAsset(positionModalData.symbol) !== positionModalData.commissionAsset">
+                            Net Cost: <span class="font-mono" x-text="'$' + (parseFloat(positionModalData.quantity || 0) * parseFloat(positionModalData.price || 0) + parseFloat(positionModalData.commission || 0)).toFixed(2)"></span>
+                        </div>
                     </div>
                 </div>
                 
